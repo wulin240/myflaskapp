@@ -179,22 +179,20 @@ def chart_from_list(stock_id):
                            num_rows=num_rows)
 
 # -----------------------------
-# 篩選路由 (分頁抓取 + 靈活最近資料)
 @app.route('/filter', methods=['POST'])
 def filter_stocks():
     import urllib.parse
     import pandas as pd
     from datetime import datetime, timedelta
+    import requests
 
-    # 取得篩選條件
     volume_min = request.form.get('volume_min', type=float, default=0)
     trend_type = request.form.get('trend_type', '')
     adr14_min = request.form.get('change_min', type=float, default=0)
     simple_mode = request.form.get('simple_mode') == '1'
-    num_rows = request.form.get('num_rows', type=int, default=60)  # 只控制 K 棒顯示
-    recent_days = request.form.get('recent_days', type=int, default=30)  # 可調整抓最近幾天資料
+    num_rows = request.form.get('num_rows', type=int, default=60)
+    recent_days = request.form.get('recent_days', type=int, default=30)
 
-    # 計算最近日期
     recent_date = (datetime.today() - timedelta(days=recent_days)).strftime("%Y-%m-%d")
 
     all_data = []
@@ -204,16 +202,22 @@ def filter_stocks():
     while True:
         try:
             res = requests.get(
-                f"{SUPABASE_URL}/rest/v1/{TABLE_NAME}",
-                headers=headers,
-                params={
-                    "select": "stock_id,stock_name,volume,open,close,high,low,date",
-                    "date": f"gte.{recent_date}",
-                    "order": "stock_id.asc,date.asc",
-                    "limit": limit,
-                    "offset": offset
+                f"{SUPABASE_URL}/rest/v1/quick_view",
+                headers={
+                    "apikey": SUPABASE_KEY.strip(),
+                    "Authorization": f"Bearer {SUPABASE_KEY.strip()}"
                 },
-                timeout=60
+                params={
+                    "latest_volume": f"gte.{int(volume_min)}",
+                    "adr14": f"gte.{adr14_min}",
+                    "latest_date": f"gte.{recent_date}",
+                    "trend": f"eq.{trend_type}" if trend_type else None,
+                    "order": "latest_date.desc",
+                    "limit": limit,
+                    "offset": offset,
+                    "select": "*"
+                },
+                timeout=30
             )
             res.raise_for_status()
             data = res.json()
@@ -224,66 +228,15 @@ def filter_stocks():
                 break
             offset += limit
         except Exception as e:
-            return f"<h2>Supabase 讀取資料失敗: {e}</h2><a href='/'>返回</a>"
+            return f"<h2>Supabase 讀取 QUICK_VIEW 失敗: {e}</h2><a href='/'>返回</a>"
 
     if not all_data:
-        return "<h2>Supabase 沒有資料</h2><a href='/'>返回</a>"
-
-    df = pd.DataFrame(all_data)
-    df['date'] = pd.to_datetime(df['date'])
-    df.sort_values(['stock_id','date'], inplace=True)
-
-    # 計算 DailyRangePct
-    df['DailyRangePct'] = ((df['close'] - df['open']).abs() / df['open']) * 100
-
-    # 產生篩選結果
-    result_rows = []
-
-    for sid, sub in df.groupby('stock_id'):
-        sub = sub.sort_values('date')
-        if len(sub) < 2:
-            continue
-
-        # **第一步：最新一筆成交量判斷**
-        latest = sub.iloc[-1]
-        if latest['volume'] < volume_min:
-            continue  # 直接跳過不處理這支股票
-
-        # 計算最近 14 筆 ADR
-        adr14_value = sub['DailyRangePct'].tail(14).mean()
-        if adr14_value < adr14_min:
-            continue
-
-        prev_high = sub['high'].iloc[:-1].max()
-        prev_low = sub['low'].iloc[:-1].min()
-        last_high = latest['high']
-        last_low = latest['low']
-
-        if last_high > prev_high and last_low > prev_low:
-            trend = "多頭"
-        elif last_high < prev_high and last_low < prev_low:
-            trend = "空頭"
-        else:
-            trend = "盤整"
-
-        if trend_type and trend != trend_type:
-            continue
-
-        result_rows.append({
-            'stock_id': sid,
-            'stock_name': latest.get('stock_name',''),
-            'volume': latest['volume'],
-            'adr14': round(adr14_value,2),
-            'trend': trend
-        })
-
-    if not result_rows:
         return "<h2>沒有符合條件的股票</h2><a href='/'>返回</a>"
 
-    # **全部符合條件的股票都列出來，不限制數量**
-    result = pd.DataFrame(result_rows).reset_index(drop=True)
-    count = len(result)
-    stock_ids = [row['stock_id'] for _, row in result.iterrows()]
+    df = pd.DataFrame(all_data)
+
+    count = len(df)
+    stock_ids = [str(sid) for sid in df['stock_id']]
     list_param = urllib.parse.quote(','.join(stock_ids))
 
     # 生成 HTML
@@ -296,26 +249,27 @@ def filter_stocks():
         <th>股票名稱</th>
         <th>成交量</th>
         <th>ADR14(%)</th>
+        <th>14天平均成交量</th>
         <th>趨勢</th>
       </tr>
     </thead>
     <tbody>
     """
-    for idx, row in result.iterrows():
+    for idx, row in df.iterrows():
         simple_param = "1" if simple_mode else "0"
         html += (
             f"<tr>"
             f"<td><a href='/chart/{row['stock_id']}?simple_mode={simple_param}&num_rows={num_rows}&list={list_param}&index={idx}'>{row['stock_id']}</a></td>"
             f"<td>{row['stock_name']}</td>"
-            f"<td>{int(row['volume'])}</td>"
+            f"<td>{int(row['latest_volume'])}</td>"
             f"<td>{row['adr14']:.2f}</td>"
+            f"<td>{int(row['avg_volume_14'])}</td>"
             f"<td>{row['trend']}</td>"
             f"</tr>"
         )
     html += "</tbody></table><br><a href='/'>返回</a>"
 
     return html
-
 
 # -----------------------------
 if __name__ == '__main__':
