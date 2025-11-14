@@ -1,0 +1,16 @@
+flask==2.3.3
+gunicorn==21.2.0
+requests==2.32.3
+
+# 非常穩定的 numpy + pandas 版本
+numpy==1.26.4
+pandas==2.1.4
+
+# yfinance 最穩定
+yfinance==0.2.38
+
+# tqdm
+tqdm==4.66.4
+
+# plotly
+plotly==5.22.0

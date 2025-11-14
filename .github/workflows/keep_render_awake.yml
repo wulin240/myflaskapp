@@ -1,0 +1,16 @@
+name: Keep Render Awake
+
+on:
+  schedule:
+    - cron: "*/13 * * * *"   # 每 5 分鐘 ping 一次0
+  workflow_dispatch:         # 也可手動觸發
+
+jobs:
+  ping-render:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Ping Render
+        run: |
+          curl -s https://myflaskapp-6f1u.onrender.com > /dev/null
+          echo "Ping sent to Render at $(date)"

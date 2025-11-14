@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>台股K線查詢系統</title>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; padding-top: 30px; }
+    input, select { margin: 5px; padding: 8px; }
+    button { padding: 8px 16px; cursor: pointer; }
+    hr { margin: 20px 0; }
+  </style>
+</head>
+<body>
+  <h1>📈 台股K線查詢系統</h1>
+
+  <!-- 股票代號查詢 -->
+  <form action="/query" method="post">
+    <h3>🔍 查詢個股</h3>
+    <label>股票代號：</label>
+    <input type="text" name="stock_id" required><br>
+    <label>起始日期：</label>
+    <input type="date" name="start_date"><br>
+    <label>結束日期：</label>
+    <input type="date" name="end_date"><br>
+    <label>顯示筆數：</label>
+    <input type="number" name="num_rows" value="30" min="1" max="300"><br>
+    <button type="submit">查詢</button>
+    <label>
+      <input type="checkbox" name="simple_mode" value="1">
+      簡單模式
+    </label>
+  </form>
+
+  <hr>
+
+  <!-- 股票條件篩選 -->
+  <form action="/filter" method="post">
+    <h3>🎯 股票條件篩選</h3>
+    <label>成交量大於：</label>
+    <input type="number" name="volume_min" placeholder="輸入成交量" value=100000><br>
+
+    <label>趨勢：</label>
+    <select name="trend_type">
+      <option value="多頭">多頭</option>
+      <option value="空頭">空頭</option>
+      <option value="盤整">盤整</option>
+      <option value="">不限</option>
+    </select><br>
+
+    <label>ADR14(平均波動%) 大於：</label>
+    <input type="number" name="change_min" placeholder="輸入門檻值" value=2><br>
+
+    <label>顯示筆數：</label>
+    <input type="number" name="num_rows" value="30" min="1" max="300"><br>
+
+    <button type="submit">篩選股票</button>
+    <label>
+      <input type="checkbox" name="simple_mode" value="1">
+      簡單模式
+    </label>
+  </form>
+</body>
+</html>

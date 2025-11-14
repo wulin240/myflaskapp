@@ -1,0 +1,212 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>{{ stock_id }} K線圖</title>
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 0; }
+    .header { text-align: center; padding: 10px; background-color: #f0f0f0; }
+    .chart-container {
+      padding: 20px;
+      overflow-x: auto;
+      -webkit-overflow-scrolling: touch;
+      touch-action: pan-x pan-y;
+    }
+    .chart-inner { min-width: 900px; width: 100%; }
+    a { text-decoration: none; color: blue; }
+    .draw-panel {
+      position: absolute;
+      top: 10px; right: 10px;
+      background: rgba(240,240,240,0.9);
+      padding: 5px;
+      border-radius: 5px;
+      font-size: 14px;
+      z-index: 10;
+    }
+    select, input, button { margin: 2px; padding: 2px; font-size: 12px; }
+    #hoverInfo {
+      position: absolute;
+      background: rgba(255,255,255,0.95);
+      border: 1px solid #ccc;
+      padding: 5px 8px;
+      border-radius: 5px;
+      display: none;
+      font-size: 13px;
+      pointer-events: none;
+      z-index: 20;
+    }
+    #stockIndexDisplay {
+      position: absolute;
+      top: 10px; left: 10px;
+      background: rgba(240,240,240,0.9);
+      padding: 5px 8px;
+      border-radius: 5px;
+      font-size: 14px;
+      z-index: 10;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h2>{{ stock_id }} K線圖</h2>
+    <a href="/">返回首頁</a>
+  </div>
+
+  <div id="stockIndexDisplay"></div>
+
+  <div class="draw-panel">
+    線條顏色：
+    <select id="lineColor">
+      <option value="red" selected>紅</option>
+      <option value="blue">藍</option>
+      <option value="green">綠</option>
+      <option value="black">黑</option>
+    </select>
+    線寬：
+    <input type="number" id="lineWidth" value="2" min="1" max="10" style="width:40px;">
+    <button onclick="updateDrawSettings()">更新</button>
+    <button id="toggleDraw" style="background:#ddd;">📱 開啟畫筆</button>
+    <button id="toggleMA" style="background:#ddd;">切換均線顯示</button>
+    <button id="clearDraw" style="background:#ffdddd;">🧹 清除繪圖</button>
+  </div>
+
+  <button id="prevStock" style="background:#ddd;">⬅️ 上一筆</button>
+  <button id="nextStock" style="background:#ddd;">下一筆 ➡️</button>
+
+  <div class="chart-container">
+    <div class="chart-inner">
+      {{ chart_html | safe }}
+    </div>
+  </div>
+
+  <div id="hoverInfo"></div>
+
+  <script>
+  let penEnabled = false;
+  let maHidden = false;
+
+  // 更新畫筆設定
+  function updateDrawSettings() {
+      const color = document.getElementById("lineColor").value;
+      const width = parseInt(document.getElementById("lineWidth").value);
+      const gd = document.querySelector(".plotly-graph-div");
+      Plotly.relayout(gd, {
+          'newshape.line.color': color,
+          'newshape.line.width': width
+      });
+  }
+
+  // 切換均線顯示
+  function toggleMA() {
+      const gd = document.querySelector(".plotly-graph-div");
+      const visibleMAs = [];
+      gd.data.forEach((trace, i) => {
+          if(trace.name && trace.name.includes('MA')) {
+              const current = trace.visible !== 'legendonly';
+              Plotly.restyle(gd, {'visible': !current}, [i]);
+              if(!current) visibleMAs.push(trace.name);
+          }
+      });
+      localStorage.setItem('maVisible', JSON.stringify(visibleMAs));
+      maHidden = false;
+  }
+
+  // 清除所有繪圖線
+  function clearDrawings() {
+      const gd = document.querySelector(".plotly-graph-div");
+      Plotly.relayout(gd, {'shapes': []});
+  }
+
+  document.addEventListener("DOMContentLoaded", function() {
+      const gd = document.querySelector(".plotly-graph-div");
+      const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
+      const hoverBox = document.getElementById("hoverInfo");
+      const toggleBtn = document.getElementById("toggleDraw");
+      const toggleMABtn = document.getElementById("toggleMA");
+      const clearBtn = document.getElementById("clearDraw");
+      const stockIndexDisplay = document.getElementById("stockIndexDisplay");
+
+      toggleMABtn.addEventListener("click", toggleMA);
+      clearBtn.addEventListener("click", clearDrawings);
+
+      // 還原均線狀態
+      const stored = localStorage.getItem('maVisible');
+      if(stored) {
+          const visibleMAs = JSON.parse(stored);
+          gd.data.forEach((trace, i) => {
+              if(trace.name && trace.name.includes('MA')) {
+                  const show = visibleMAs.includes(trace.name);
+                  Plotly.restyle(gd, {'visible': show ? true : 'legendonly'}, [i]);
+              }
+          });
+          maHidden = false;
+      }
+
+      if (isMobile) {
+          Plotly.relayout(gd, { dragmode: false });
+          toggleBtn.addEventListener("click", () => {
+              penEnabled = !penEnabled;
+              if (penEnabled) {
+                  Plotly.relayout(gd, { dragmode: 'drawline' });
+                  toggleBtn.textContent = "📱 關閉畫筆";
+                  toggleBtn.style.background = "#c0ffc0";
+              } else {
+                  Plotly.relayout(gd, { dragmode: false });
+                  toggleBtn.textContent = "📱 開啟畫筆";
+                  toggleBtn.style.background = "#ddd";
+              }
+          });
+
+          gd.on('plotly_click', function(data) {
+              if (!data.points || !data.points.length) return;
+              const pt = data.points[0];
+              const info = `${pt.data.name || ''}<br>${pt.x}<br>${pt.y}`;
+              hoverBox.innerHTML = info;
+              hoverBox.style.left = (data.event.clientX + 10) + 'px';
+              hoverBox.style.top = (data.event.clientY - 20) + 'px';
+              hoverBox.style.display = 'block';
+              setTimeout(() => hoverBox.style.display = 'none', 2500);
+          });
+      } else {
+          gd.on('plotly_hover', function(data) {
+              const pt = data.points[0];
+              const info = `${pt.data.name || ''}<br>${pt.x}<br>${pt.y}`;
+              hoverBox.innerHTML = info;
+              hoverBox.style.left = (data.event.clientX + 10) + 'px';
+              hoverBox.style.top = (data.event.clientY - 20) + 'px';
+              hoverBox.style.display = 'block';
+          });
+          gd.on('plotly_unhover', function() {
+              hoverBox.style.display = 'none';
+          });
+      }
+
+      // 顯示目前第幾筆
+      function updateStockIndexDisplay() {
+          stockIndexDisplay.textContent = `${currentIndex+1}/${stockList.length}`;
+      }
+      updateStockIndexDisplay();
+  });
+
+  const stockList = "{{ stock_list }}".split(',');
+  let currentIndex = parseInt("{{ current_index }}");
+
+  document.getElementById("prevStock").addEventListener("click", () => {
+      if(currentIndex > 0) currentIndex--;
+      redirectToStock();
+  });
+
+  document.getElementById("nextStock").addEventListener("click", () => {
+      if(currentIndex < stockList.length - 1) currentIndex++;
+      redirectToStock();
+  });
+
+  function redirectToStock(){
+      const stock_id = stockList[currentIndex];
+      const url = `/chart/${stock_id}?simple_mode={{ '1' if simple_mode else '0' }}&num_rows={{ num_rows }}&list={{ stock_list }}&index=${currentIndex}`;
+      window.location.href = url;
+  }
+  </script>
+</body>
+</html>
