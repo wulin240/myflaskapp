@@ -49,10 +49,4 @@ jobs:
           git add update_log.txt
           git add .
           git diff-index --quiet HEAD || git commit -m "Auto update DB $(date +'%Y-%m-%d %H:%M')"
-          git push https://$PAT_TOKEN@github.com/wulin240/myflaskapp.git HEAD:main
-
-      # 7️⃣ Ping Render 保持服務醒著
-      - name: Wake Render Service
-        run: |
-          curl -s https://你的render網址.onrender.com > /dev/null
-          echo "Ping sent to Render at $(date)"
+          git push https://x-access-token:${PAT_TOKEN}@github.com/wulin240/myflaskapp.git HEAD:main
