@@ -134,13 +134,13 @@ def generate_chart(stock_id_clean, start_date=None, end_date=None, simple_mode=F
     ), row=1, col=1)
 
     # ----------- MA 線 -----------
-    ma_colors = {5: 'blue', 10: 'orange', 20: 'purple', 60: 'black'}
+    ma_colors = {5: 'blue', 10: 'orange', 20: 'purple', 60: 'red'}
     for ma in [5, 10, 20, 60]:
         fig.add_trace(go.Scatter(
             x=df['date'],
             y=df[f"MA{ma}"],
             mode='lines',
-            line=dict(color=ma_colors[ma], width=1),
+            line=dict(color=ma_colors[ma], width=2),
             name=f"MA{ma}"
         ), row=1, col=1)
 

@@ -75,13 +75,31 @@ function updateDrawSettings() {
 
 function toggleMA() {
     const gd = document.querySelector(".plotly-graph-div");
+    let maVisible = localStorage.getItem("maVisible");
+    if(maVisible === null) maVisible = 'true'; // 初始值顯示
+    maVisible = maVisible === 'true' ? 'false' : 'true';
+    localStorage.setItem("maVisible", maVisible);
+
     gd.data.forEach((trace,i)=>{
-        if(trace.name && trace.name.includes('MA')){
-            const current = trace.visible!=='legendonly';
-            Plotly.restyle(gd,{'visible':!current},[i]);
+        if(trace.name && (trace.name.includes('MA') || trace.name.includes('止損'))){
+            const visible = maVisible === 'true' ? true : 'legendonly';
+            Plotly.restyle(gd, {'visible': visible}, [i]);
         }
     });
 }
+
+// 初始化時，根據 localStorage 設定均線和止損線顯示
+document.addEventListener("DOMContentLoaded", function(){
+    const gd = document.querySelector(".plotly-graph-div");
+    let maVisible = localStorage.getItem("maVisible");
+    if(maVisible === null) maVisible = 'true'; // 預設顯示
+    gd.data.forEach((trace,i)=>{
+        if(trace.name && (trace.name.includes('MA') || trace.name.includes('止損'))){
+            const visible = maVisible === 'true' ? true : 'legendonly';
+            Plotly.restyle(gd, {'visible': visible}, [i]);
+        }
+    });
+});
 
 function clearDrawings(){
     const gd = document.querySelector(".plotly-graph-div");
