@@ -59,5 +59,20 @@
       簡單模式
     </label>
   </form>
+
+  <hr>
+
+  <!-- 我的最愛 -->
+  <form action="/favorites" method="post">
+    <h3>⭐ 我的最愛</h3>
+    <p>顯示最近 90 筆最愛股票資料</p>
+    <input type="hidden" name="num_rows" value="90">
+    <label>
+      <input type="checkbox" name="simple_mode" value="1">
+      簡單模式
+    </label><br>
+    <button type="submit">查看最愛股票</button>
+  </form>
+
 </body>
 </html>
