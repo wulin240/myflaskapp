@@ -4,7 +4,11 @@ name: Auto Update DB
 on:
   schedule:
     - cron: '0 6 * * *'  # UTC 06:00 = 台北 14:00
-  workflow_dispatch:      # 手動觸發
+  workflow_dispatch:
+
+# 🔥🔥🔥 必加！讓 Actions 可推回 Repo
+permissions:
+  contents: write
 
 jobs:
   update-db:
@@ -13,7 +17,9 @@ jobs:
     steps:
       # 1️⃣ 取得 repo
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.PAT_TOKEN }}  # 用 PAT 才能 push
 
       # 2️⃣ 安裝 Python 3.11
       - name: Set up Python
@@ -38,13 +44,15 @@ jobs:
           python update_db.py
           echo "$(date '+%Y-%m-%d %H:%M:%S') - update_db.py executed" >> update_log.txt
 
-      # 6️⃣ Commit & push 變更
+      # 6️⃣ Commit & push
       - name: Commit & push changes
         env:
           PAT_TOKEN: ${{ secrets.PAT_TOKEN }}
         run: |
           git config --global user.name "github-actions[bot]"
-          git config --global user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+
           git add .
           git diff-index --quiet HEAD || git commit -m "Auto update DB $(date +'%Y-%m-%d %H:%M')"
-          git push https://x-access-token:$PAT_TOKEN@github.com/wulin240/myflaskapp.git HEAD:main
+
+          git push https://x-access-token:${PAT_TOKEN}@github.com/${{ github.repository }}.git HEAD:main
