@@ -47,7 +47,6 @@ def fetch_stock_data(stock_id):
 
 # -----------------------------
 def generate_chart(stock_id_clean, start_date=None, end_date=None, simple_mode=False, num_rows=30):
-
     df = fetch_stock_data(stock_id_clean)
     if df.empty:
         return None, f"{stock_id_clean} 無資料"
@@ -58,11 +57,10 @@ def generate_chart(stock_id_clean, start_date=None, end_date=None, simple_mode=F
             (df['date'] <= pd.to_datetime(end_date))
         ]
 
-    df = df.tail(num_rows)
     if df.empty:
         return None, f"{stock_id_clean} 在 {start_date} ~ {end_date} 無資料"
 
-    # ----------- 基礎欄位 -----------
+    # ----------- 基礎欄位
     df['line'] = df.apply(
         lambda row:
             row['high'] if row['close'] > row['open']
@@ -71,39 +69,40 @@ def generate_chart(stock_id_clean, start_date=None, end_date=None, simple_mode=F
         axis=1
     )
 
-    # ----------- 均線 -----------
+    # ----------- 均線
+    df_full = df.copy()
     for ma in [5, 10, 20, 60]:
-        if len(df) >= ma:
-            df[f"MA{ma}"] = df['close'].rolling(ma).mean()
-        else:
-            df[f"MA{ma}"] = df['close'].expanding().mean()
+        df_full[f"MA{ma}"] = df_full['close'].rolling(ma).mean()
 
+    df = df_full.tail(num_rows)
+
+    # ----------- 成交量均線
     df['VOL5'] = df['volume'].rolling(5).mean()
     df['VOL20'] = df['volume'].rolling(20).mean()
 
-    # ----------- ATR -----------
+    # ----------- ATR
     df['H-L'] = df['high'] - df['low']
     df['H-PC'] = abs(df['high'] - df['close'].shift(1))
     df['L-PC'] = abs(df['low'] - df['close'].shift(1))
     df['TR'] = df[['H-L', 'H-PC', 'L-PC']].max(axis=1)
     df['ATR14'] = df['TR'].rolling(14).mean().round(3)
 
-    # ----------- 止損價 -----------
+    # ----------- 止損價
     df['stop_loss'] = df['low'] - df['ATR14'].fillna(0)
 
-    # ----------- VWAP -----------
+    # ----------- VWAP
     df['TP'] = (df['high'] + df['low'] + df['close']) / 3
     df['TPV'] = df['TP'] * df['volume']
     df['VWAP'] = df['TPV'].cumsum() / df['volume'].cumsum()
 
-    # ----------- y 軸範圍 -----------
+    # ----------- y 軸範圍
     min_price = df[['low', 'MA5', 'MA10', 'MA20', 'MA60', 'VWAP']].min().min()
     max_price = df[['high', 'MA5', 'MA10', 'MA20', 'MA60', 'VWAP']].max().max()
     price_range = max_price - min_price
     yaxis_min = min_price - price_range / 4
     yaxis_max = max_price + price_range / 4
 
-    # ----------- 建立圖表 -----------
+    # ----------- 建立圖表
     fig = make_subplots(
         rows=3, cols=1,
         shared_xaxes=True,
@@ -112,7 +111,6 @@ def generate_chart(stock_id_clean, start_date=None, end_date=None, simple_mode=F
         subplot_titles=("K線圖", "成交量", "ATR")
     )
 
-    # ----------- K 線 -----------
     fig.add_trace(go.Candlestick(
         x=df['date'],
         open=df['open'],
@@ -124,7 +122,6 @@ def generate_chart(stock_id_clean, start_date=None, end_date=None, simple_mode=F
         name='K線'
     ), row=1, col=1)
 
-    # ----------- 止損線 -----------
     fig.add_trace(go.Scatter(
         x=df['date'],
         y=df['stop_loss'],
@@ -133,18 +130,16 @@ def generate_chart(stock_id_clean, start_date=None, end_date=None, simple_mode=F
         name='止損價'
     ), row=1, col=1)
 
-    # ----------- MA 線 -----------
-    ma_colors = {5: 'blue', 10: 'orange', 20: 'purple', 60: 'red'}
+    ma_colors = {5: 'blue', 10: 'orange', 20: 'purple', 60: 'black'}
     for ma in [5, 10, 20, 60]:
         fig.add_trace(go.Scatter(
             x=df['date'],
             y=df[f"MA{ma}"],
             mode='lines',
-            line=dict(color=ma_colors[ma], width=2),
+            line=dict(color=ma_colors[ma], width=1),
             name=f"MA{ma}"
         ), row=1, col=1)
 
-    # ----------- 折線 -----------
     fig.add_trace(go.Scatter(
         x=df['date'], y=df['line'],
         mode='lines',
@@ -152,7 +147,6 @@ def generate_chart(stock_id_clean, start_date=None, end_date=None, simple_mode=F
         name='折線'
     ), row=1, col=1)
 
-    # ----------- VWAP -----------
     fig.add_trace(go.Scatter(
         x=df['date'], y=df['VWAP'],
         mode='lines',
@@ -160,7 +154,6 @@ def generate_chart(stock_id_clean, start_date=None, end_date=None, simple_mode=F
         name='VWAP'
     ), row=1, col=1)
 
-    # ----------- 成交量 -----------
     vol_color = df.apply(
         lambda row:
             'red' if row['close'] > row['open']
@@ -189,7 +182,6 @@ def generate_chart(stock_id_clean, start_date=None, end_date=None, simple_mode=F
         name='VOL20'
     ), row=2, col=1)
 
-    # ----------- ATR -----------
     fig.add_trace(go.Scatter(
         x=df['date'], y=df['ATR14'],
         mode='lines',
@@ -197,7 +189,6 @@ def generate_chart(stock_id_clean, start_date=None, end_date=None, simple_mode=F
         name='ATR14'
     ), row=3, col=1)
 
-    # ----------- 標題、互動、水平線（shape）支援 -----------
     stock_name = df['stock_name'].iloc[0] if 'stock_name' in df.columns else stock_id_clean
     first_date = df['date'].iloc[0].strftime("%Y-%m-%d")
     last_date = df['date'].iloc[-1].strftime("%Y-%m-%d")
@@ -210,18 +201,15 @@ def generate_chart(stock_id_clean, start_date=None, end_date=None, simple_mode=F
         ),
         xaxis_rangeslider_visible=False,
         hovermode='x unified',
-
-        # ------- 可畫線、可畫水平線（openpath）、可刪除 -------
         dragmode='drawline',
         newshape=dict(line_color='black', line_width=2),
         modebar_add=[
             'drawline',
-            'drawopenpath',     # ★★★ 支援水平線 / 任意線
+            'drawopenpath',
             'drawrect',
             'drawcircle',
             'eraseshape'
         ],
-
         yaxis=dict(range=[yaxis_min, yaxis_max]),
         height=1200
     )
@@ -229,6 +217,19 @@ def generate_chart(stock_id_clean, start_date=None, end_date=None, simple_mode=F
     html = fig.to_html(include_plotlyjs='cdn')
     return html, None
 
+# -----------------------------
+# 判斷是否在最愛
+def is_favorite(stock_id):
+    try:
+        res = requests.get(
+            f"{SUPABASE_URL}/rest/v1/{FAVORITE_TABLE}",
+            headers=headers,
+            params={"stock_id": f"eq.{stock_id}"}
+        )
+        res.raise_for_status()
+        return len(res.json()) > 0
+    except:
+        return False
 
 # -----------------------------
 @app.route('/')
@@ -249,6 +250,8 @@ def query():
     if error:
         return f"<h2>{error}</h2><a href='/'>返回</a>"
 
+    fav_status = is_favorite(stock_id)
+
     return render_template(
         'chart.html',
         chart_html=chart_html,
@@ -256,7 +259,8 @@ def query():
         stock_list=stock_id,
         current_index=0,
         simple_mode=simple_mode,
-        num_rows=num_rows
+        num_rows=num_rows,
+        is_favorite=fav_status
     )
 
 # -----------------------------
@@ -280,6 +284,8 @@ def chart_from_list(stock_id):
     if error:
         return f"<h2>{error}</h2><a href='/'>返回</a>"
 
+    fav_status = is_favorite(current_stock)
+
     return render_template(
         'chart.html',
         chart_html=chart_html,
@@ -287,7 +293,8 @@ def chart_from_list(stock_id):
         stock_list=','.join(stock_ids),
         current_index=index,
         simple_mode=simple_mode,
-        num_rows=num_rows
+        num_rows=num_rows,
+        is_favorite=fav_status
     )
 
 # -----------------------------
@@ -373,6 +380,7 @@ def filter_stocks():
     return html
 
 # -----------------------------
+# 最愛功能整合
 @app.route('/favorites', methods=['POST'])
 def favorites_page():
 
@@ -411,13 +419,17 @@ def favorites_page():
     list_param = urllib.parse.quote(','.join(stock_ids))
 
     html = (
-        f"<h2>我的最愛（共 {count} 筆）</h2>"
-        "<table border='1' cellpadding='6' style='margin-left:0; text-align:left;'>"
-        "<thead><tr>"
-        "<th>股票代號</th><th>股票名稱</th><th>成交量</th>"
-        "<th>ADR14(%)</th><th>14天平均成交量</th><th>趨勢</th>"
-        "</tr></thead><tbody>"
-    )
+    f"<h2>我的最愛（共 {count} 筆）</h2>"
+    "<form method='post' action='/favorites_clear' "
+    "onsubmit=\"return confirm('確定要刪除所有最愛嗎？');\">"
+    "<button type='submit' style='margin-bottom:10px;'>刪除全部最愛</button>"
+    "</form>"
+    "<table border='1' cellpadding='6' style='margin-left:0; text-align:left;'>"
+    "<thead><tr>"
+    "<th>股票代號</th><th>股票名稱</th><th>成交量</th>"
+    "<th>ADR14(%)</th><th>14天平均成交量</th><th>趨勢</th>"
+    "</tr></thead><tbody>"
+)
 
     for idx, row in df_qv.iterrows():
         simple_param = "1" if simple_mode else "0"
@@ -435,7 +447,6 @@ def favorites_page():
     html += "</tbody></table><br><a href='/'>返回</a>"
     return html
 
-# -----------------------------
 @app.route('/favorite', methods=['POST'])
 def favorite_toggle():
     stock_id = request.form.get('stock_id', '').strip()
@@ -477,6 +488,19 @@ def favorite_toggle():
 
     except Exception as e:
         return jsonify({"message": f"操作最愛失敗: {e}"}), 500
+
+@app.route('/favorites_clear', methods=['POST'])
+def favorites_clear():
+    try:
+        res = requests.delete(
+            f"{SUPABASE_URL}/rest/v1/{FAVORITE_TABLE}",
+            headers=headers,
+            params={"stock_id": "not.is.null"}  
+        )
+        res.raise_for_status()
+        return "<script>alert('已刪除所有最愛股票'); window.location.href='/'</script>"
+    except Exception as e:
+        return f"<h2>刪除最愛失敗: {e}</h2><a href='/'>返回首頁</a>"
 
 # -----------------------------
 if __name__ == '__main__':

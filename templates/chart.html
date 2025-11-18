@@ -14,7 +14,7 @@ a { text-decoration: none; color: blue; }
 select, input, button { margin: 2px; padding: 2px; font-size: 12px; }
 #hoverInfo { position: absolute; background: rgba(255,255,255,0.95); border: 1px solid #ccc; padding: 5px 8px; border-radius: 5px; display: none; font-size: 13px; pointer-events: none; z-index: 20; }
 #stockIndexDisplay { position: absolute; top: 10px; left: 10px; background: rgba(240,240,240,0.9); padding: 5px 8px; border-radius: 5px; font-size: 14px; z-index: 10; }
-#favoriteBtn { background:#ffd700; }
+#favoriteBtn { padding:6px 10px; border:none; cursor:pointer; }
 </style>
 </head>
 <body>
@@ -62,9 +62,8 @@ select, input, button { margin: 2px; padding: 2px; font-size: 12px; }
 <div id="hoverInfo"></div>
 
 <script>
-// ----------- 畫筆 & 均線 & 清除 ---------
+// ----------- 畫筆 & 均線 & 清除 -----------
 let penEnabled = false;
-let maHidden = false;
 
 function updateDrawSettings() {
     const color = document.getElementById("lineColor").value;
@@ -76,7 +75,7 @@ function updateDrawSettings() {
 function toggleMA() {
     const gd = document.querySelector(".plotly-graph-div");
     let maVisible = localStorage.getItem("maVisible");
-    if(maVisible === null) maVisible = 'true'; // 初始值顯示
+    if(maVisible === null) maVisible = 'true';
     maVisible = maVisible === 'true' ? 'false' : 'true';
     localStorage.setItem("maVisible", maVisible);
 
@@ -92,7 +91,7 @@ function toggleMA() {
 document.addEventListener("DOMContentLoaded", function(){
     const gd = document.querySelector(".plotly-graph-div");
     let maVisible = localStorage.getItem("maVisible");
-    if(maVisible === null) maVisible = 'true'; // 預設顯示
+    if(maVisible === null) maVisible = 'true';
     gd.data.forEach((trace,i)=>{
         if(trace.name && (trace.name.includes('MA') || trace.name.includes('止損'))){
             const visible = maVisible === 'true' ? true : 'legendonly';
@@ -159,6 +158,39 @@ document.addEventListener("DOMContentLoaded", function(){
         });
         gd.on('plotly_unhover', function(){hoverBox.style.display='none';});
     }
+
+    // ----------- 最愛按鈕初始化 -----------
+    const favoriteBtn = document.getElementById("favoriteBtn");
+    let isFavorite = {{ 'true' if is_favorite else 'false' }};
+    function updateFavoriteButton(){
+        if(isFavorite){
+            favoriteBtn.style.backgroundColor='green';
+            favoriteBtn.style.color='white';
+            favoriteBtn.textContent='⭐ 已加入最愛';
+        }else{
+            favoriteBtn.style.backgroundColor='#ffd700';
+            favoriteBtn.style.color='black';
+            favoriteBtn.textContent='⭐ 加入最愛';
+        }
+    }
+    updateFavoriteButton();
+
+    favoriteBtn.addEventListener("click", async ()=>{
+        try{
+            const res = await fetch("/favorite",{
+                method:"POST",
+                headers:{"Content-Type":"application/x-www-form-urlencoded"},
+                body:`stock_id=${encodeURIComponent("{{ stock_id }}")}&stock_name=${encodeURIComponent("{{ stock_id }}")}`
+            });
+            const data = await res.json();
+            if(data.favorite !== undefined) isFavorite = data.favorite;
+            updateFavoriteButton();
+            alert(data.message);
+        }catch(e){
+            alert("操作最愛失敗");
+            console.error(e);
+        }
+    });
 });
 
 // ----------- 上下筆切換 -----------
@@ -173,24 +205,6 @@ document.getElementById("prevStock").addEventListener("click", ()=>{
 document.getElementById("nextStock").addEventListener("click", ()=>{
     if(currentIndex<stockList.length-1) currentIndex++;
     location.href=`/chart/${stockList[currentIndex]}?list=${stockList.join(',')}&index=${currentIndex}&num_rows={{ num_rows }}&simple_mode={{ '1' if simple_mode else '0' }}`;
-});
-
-// ----------- 最愛按鈕 -----------
-const favoriteBtn = document.getElementById("favoriteBtn");
-favoriteBtn.addEventListener("click", async ()=>{
-    try{
-        const res = await fetch("/favorite",{
-            method:"POST",
-            headers:{"Content-Type":"application/x-www-form-urlencoded"},
-            body:`stock_id=${encodeURIComponent("{{ stock_id }}")}&stock_name=${encodeURIComponent("{{ stock_id }}")}`
-        });
-        const data = await res.json();
-        alert(data.message);
-        favoriteBtn.textContent = data.favorite ? "⭐ 已加入最愛" : "⭐ 加入最愛";
-    }catch(e){
-        alert("操作最愛失敗");
-        console.error(e);
-    }
 });
 
 // ----------- 快捷筆數按鈕 -----------
