@@ -744,11 +744,11 @@ import urllib.parse
 from datetime import datetime, timedelta
 from flask import Flask, render_template, request, jsonify
 
-# ----------------- 配置 (請替換為您的實際值) -----------------
-# 假設這些變數已在您的檔案開頭定義
+# ----------------- 配置 (請確保這些變數已在您的實際環境中定義) -----------------
+# ⚠️ 注意：以下變數需要您根據您的 Supabase 配置來設定。
 # SUPABASE_URL = "YOUR_SUPABASE_URL"
 # SUPABASE_KEY = "YOUR_SUPABASE_KEY"
-# FAVORITE_TABLE = "favorites" # 假設您的最愛表名是 favorites
+# FAVORITE_TABLE = "favorites" # 您的最愛表名
 # headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
 
 # 假設 app 和 generate_chart 函數已定義
@@ -757,11 +757,12 @@ app = Flask(__name__)
 #     # ... (您的圖表生成邏輯) ...
 #     return "chart_html_content", None, "趨勢描述", "信號描述", "trend_class"
 
-# ----------------- 輔助函數：獲取最愛狀態和備註 (從上次修正中恢復) -----------------
+# ----------------- 輔助函數：獲取最愛狀態和備註 -----------------
 
 def get_favorite_status_and_note(stock_id):
     """檢查股票是否在最愛中，並返回 is_favorite 狀態和 note 內容。"""
     try:
+        # 假設 SUPABASE_URL 和 headers 已在全域或某處定義
         res = requests.get(
             f"{SUPABASE_URL}/rest/v1/{FAVORITE_TABLE}", 
             headers=headers, 
@@ -771,15 +772,11 @@ def get_favorite_status_and_note(stock_id):
         data = res.json()
         
         if data:
-            # 找到記錄，返回 True 和備註
-            # 使用 .get('note', '') 處理可能為 None 或不存在的情況
             return True, data[0].get('note', '') or '' 
         else:
-            # 找不到記錄，返回 False 和空備註
             return False, ''
     except Exception as e:
         print(f"Error checking favorite status for {stock_id}: {e}")
-        # 如果檢查失敗，視為不在最愛中
         return False, ''
 
 
@@ -800,7 +797,6 @@ def query():
     
     if error: return f"<h2>{error}</h2><a href='/'>返回</a>"
     
-    # 🌟 修正點 1: 使用 get_favorite_status_and_note 獲取最愛狀態和備註
     is_favorite, favorite_note = get_favorite_status_and_note(stock_id) 
     
     return render_template(
@@ -812,7 +808,7 @@ def query():
         simple_mode=simple_mode, 
         num_rows=num_rows, 
         is_favorite=is_favorite,
-        favorite_note=favorite_note, # 🌟 修正點 2: 傳遞 favorite_note 到前端
+        favorite_note=favorite_note,
         trend_desc=trend_desc,
         rebound_desc=rebound_desc,
         trend_class=trend_class,
@@ -826,18 +822,27 @@ def chart_from_list(stock_id):
     simple_mode = request.args.get('simple_mode') == '1'
     num_rows = request.args.get('num_rows', type=int, default=30)
     stock_list = request.args.get('list', '')
-    index = request.args.get('index', type=int, default=0)
+    
+    # 週期
     frequency = request.args.get('frequency', 'D')
 
     stock_ids = stock_list.split(',') if stock_list else [stock_id]
-    index = max(0, min(index, len(stock_ids)-1))
-
-    current_stock = stock_ids[index]
+    
+    # 🌟 修復邏輯：以 URL 中的 stock_id 為準，重新計算其在列表中的索引
+    current_index = 0
+    try:
+        current_index = stock_ids.index(stock_id)
+    except ValueError:
+        # 如果 URL 傳入的 stock_id 不在 list 參數中，則重設列表為單一股票
+        stock_ids = [stock_id]
+        current_index = 0
+    
+    current_stock = stock_ids[current_index] 
+    
     chart_html, error, trend_desc, rebound_desc, trend_class = generate_chart(current_stock, simple_mode=simple_mode, num_rows=num_rows, frequency=frequency)
     
     if error: return f"<h2>{error}</h2><a href='/'>返回</a>"
     
-    # 🌟 修正點 3: 使用 get_favorite_status_and_note 獲取最愛狀態和備註
     is_favorite, favorite_note = get_favorite_status_and_note(current_stock)
 
     return render_template(
@@ -845,11 +850,11 @@ def chart_from_list(stock_id):
         chart_html=chart_html, 
         stock_id=current_stock, 
         stock_list=','.join(stock_ids), 
-        current_index=index, 
+        current_index=current_index, # 傳遞正確的索引
         simple_mode=simple_mode, 
         num_rows=num_rows, 
         is_favorite=is_favorite,
-        favorite_note=favorite_note, # 🌟 修正點 4: 傳遞 favorite_note 到前端
+        favorite_note=favorite_note,
         trend_desc=trend_desc,
         rebound_desc=rebound_desc,
         trend_class=trend_class,
@@ -899,44 +904,62 @@ def filter_stocks():
     html = (f"<h2>篩選結果（共 {count} 筆）</h2>" "<table border='1' cellpadding='6' style='margin-left:0; text-align:left;'>" "<thead><tr>" "<th>股票代號</th><th>股票名稱</th><th>成交量</th>" "<th>ADR14(%)</th><th>14天平均成交量</th><th>趨勢</th>" "</tr></thead><tbody>")
     for idx, row in df.iterrows():
         simple_param = "1" if simple_mode else "0"
-        html += (f"<tr>"  
-                    f"<td><a href='/chart/{row['stock_id']}?simple_mode={simple_param}&num_rows={num_rows}&list={list_param}&index={idx}&frequency={frequency}'>{row['stock_id']}</a></td>"  
-                    f"<td>{row['stock_name']}</td>"  
-                    f"<td>{int(row['latest_volume'])}</td>"  
-                    f"<td>{row['adr14']:.2f}</td>"  
-                    f"<td>{int(row['avg_volume_14'])}</td>"  
-                    f"<td>{row['trend']}</td>"  
-                    f"</tr>")
+        html += (f"<tr>" 
+                 f"<td><a href='/chart/{row['stock_id']}?simple_mode={simple_param}&num_rows={num_rows}&list={list_param}&index={idx}&frequency={frequency}'>{row['stock_id']}</a></td>" 
+                 f"<td>{row['stock_name']}</td>" 
+                 f"<td>{int(row['latest_volume'])}</td>" 
+                 f"<td>{row['adr14']:.2f}</td>" 
+                 f"<td>{int(row['avg_volume_14'])}</td>" 
+                 f"<td>{row['trend']}</td>" 
+                 f"</tr>")
     html += "</tbody></table><br><a href='/'>返回</a>"
     return html
 
-# ----------------- Favorite 路由修正 -----------------
+# ----------------- Favorite 路由 (已完全修復順序和 405 錯誤) -----------------
 
-@app.route('/favorites', methods=['GET', 'POST']) # 🌟 修正點 5: 增加 'GET' 支援，避免 TypeError
+@app.route('/favorites', methods=['GET']) # 🌟 修正 405 錯誤：只允許 GET 訪問列表頁
 def favorites_page():
-    # 🌟 修正點 6: 從 request.values 讀取參數，兼容 GET 和 POST
-    simple_mode = request.values.get('simple_mode') == '1'
-    num_rows = request.values.get('num_rows', type=int, default=30)
-    frequency = request.values.get('frequency', 'D')
+    simple_mode = request.args.get('simple_mode') == '1'
+    num_rows = request.args.get('num_rows', type=int, default=30)
+    frequency = request.args.get('frequency', 'D')
     
     try:
-        res = requests.get(f"{SUPABASE_URL}/rest/v1/{FAVORITE_TABLE}", headers=headers); res.raise_for_status(); fav_data = res.json()
+        # 1. 獲取最愛列表及備註，並按創建時間倒序排列 (假設 created_at 存在)
+        res = requests.get(f"{SUPABASE_URL}/rest/v1/{FAVORITE_TABLE}?select=stock_id,stock_name,note&order=created_at.desc", headers=headers)
+        res.raise_for_status()
+        fav_data = res.json()
     except Exception as e: return f"<h2>讀取最愛股票失敗: {e}</h2><a href='/'>返回</a>"
     
     if not fav_data: return "<h2>尚無最愛股票</h2><a href='/'>返回</a>"
     
-    # 🌟 獲取備註資訊 (與快照資料合併，以便在列表中顯示備註，如果需要的話)
+    # 2. 準備 list_param 和索引映射 (這是列表的正確順序)
     stock_ids = [item['stock_id'] for item in fav_data]
-    
-    # 建立備註字典 {stock_id: note}
+    list_param = urllib.parse.quote(','.join(stock_ids))
     note_map = {item['stock_id']: item.get('note', '') or '' for item in fav_data}
     
+    # 3. 獲取快照資料
     try:
-        res_qv = requests.get(f"{SUPABASE_URL}/rest/v1/quick_view", headers=headers, params={"stock_id": f"in.({','.join(stock_ids)})", "order": "latest_date.desc", "select": "*"})
-        res_qv.raise_for_status(); qv_data = res_qv.json()
+        res_qv = requests.get(
+            f"{SUPABASE_URL}/rest/v1/quick_view", 
+            headers=headers, 
+            params={
+                "stock_id": f"in.({','.join(stock_ids)})", 
+                "select": "*",
+            }
+        )
+        res_qv.raise_for_status()
+        qv_data = res_qv.json()
     except Exception as e: return f"<h2>讀取最愛股票快照資料失敗: {e}</h2><a href='/'>返回</a>"
 
-    df_qv = pd.DataFrame(qv_data); count = len(df_qv); list_param = urllib.parse.quote(','.join(stock_ids))
+    df_qv = pd.DataFrame(qv_data)
+    
+    # 🌟 核心修正：強制快照資料的順序與 stock_ids 列表順序一致
+    # 1) 將 stock_id 轉換為字串
+    df_qv['stock_id'] = df_qv['stock_id'].astype(str)
+    # 2) 以 stock_ids 列表的順序重新索引 DataFrame
+    df_qv = df_qv.set_index('stock_id').reindex(stock_ids).reset_index()
+    
+    count = len(df_qv)
     
     html = (f"<h2>我的最愛（共 {count} 筆）</h2>" 
             "<form method='post' action='/favorites_clear' " 
@@ -945,24 +968,28 @@ def favorites_page():
             "</form>" 
             "<table border='1' cellpadding='6' style='margin-left:0; text-align:left;'>" 
             "<thead><tr>" 
-            "<th>股票代號</th><th>股票名稱</th><th>備註</th>" # 🌟 列表新增備註欄位
+            "<th>股票代號</th><th>股票名稱</th><th>備註</th>" 
             "<th>成交量</th><th>ADR14(%)</th><th>14天平均成交量</th><th>趨勢</th>" 
             "</tr></thead><tbody>")
             
-    for idx, row in df_qv.iterrows():
+    # 🌟 迭代經過排序的 DataFrame，並使用 stock_ids.index() 來獲取正確索引
+    for row in df_qv.itertuples():
+        stock_id = str(row.stock_id)
+        # 🌟 核心修正：使用 stock_ids.index() 確保索引與 list_param 順序一致
+        current_index = stock_ids.index(stock_id) 
+        current_note = note_map.get(stock_id, '') 
         simple_param = "1" if simple_mode else "0"
-        current_note = note_map.get(str(row['stock_id']), '') # 從字典中獲取備註
         
-        html += (f"<tr>"  
-                    f"<td><a href='/chart/{row['stock_id']}?simple_mode={simple_param}&num_rows={num_rows}&list={list_param}&index={idx}&frequency={frequency}'>{row['stock_id']}</a></td>"  
-                    f"<td>{row['stock_name']}</td>"  
-                    f"<td>{current_note}</td>" # 🌟 顯示備註
-                    f"<td>{int(row['latest_volume'])}</td>"  
-                    f"<td>{row['adr14']:.2f}</td>"  
-                    f"<td>{int(row['avg_volume_14'])}</td>"  
-                    f"<td>{row['trend']}</td>"  
-                    f"</tr>")
-                    
+        html += (f"<tr>" 
+                 f"<td><a href='/chart/{stock_id}?simple_mode={simple_param}&num_rows={num_rows}&list={list_param}&index={current_index}&frequency={frequency}'>{stock_id}</a></td>" 
+                 f"<td>{getattr(row, 'stock_name', 'N/A')}</td>" 
+                 f"<td>{current_note}</td>" 
+                 f"<td>{int(row.latest_volume)}</td>" 
+                 f"<td>{row.adr14:.2f}</td>" 
+                 f"<td>{int(row.avg_volume_14)}</td>" 
+                 f"<td>{row.trend}</td>" 
+                 f"</tr>")
+                
     html += "</tbody></table><br><a href='/'>返回</a>"
     return html
 
@@ -970,61 +997,57 @@ def favorites_page():
 def favorite_toggle():
     stock_id = request.form.get('stock_id', '').strip()
     stock_name = request.form.get('stock_name', '').strip()
-    note = request.form.get('note', '').strip() # 🌟 修正點 7: 接收 note 欄位
+    note = request.form.get('note', '').strip() 
     
     if not stock_name: stock_name = stock_id
     if not stock_id: return jsonify({"message": "股票代號不可為空"}), 400
     
     try:
-        # 1. 檢查是否存在 (需要獲取 note 才能判斷是刪除還是更新)
+        # 1. 檢查是否存在
         res_check = requests.get(f"{SUPABASE_URL}/rest/v1/{FAVORITE_TABLE}", 
                                  headers=headers, 
-                                 params={"stock_id": f"eq.{stock_id}", "select": "stock_id"}); 
-        res_check.raise_for_status(); 
+                                 params={"stock_id": f"eq.{stock_id}", "select": "stock_id"})
+        res_check.raise_for_status()
         exists = len(res_check.json()) > 0
     except Exception as e: return jsonify({"message": f"檢查最愛失敗: {e}"}), 500
 
     try:
         if exists:
-            # 🌟 修正點 8: 如果存在，執行更新/刪除邏輯。
-            # 由於前端只有一個按鈕，我們假設點擊按鈕就是操作狀態。
-            # 如果要移除，我們執行 DELETE；
-            # 如果要更新備註但不移除，需要另一個邏輯。
+            # 🌟 修復邏輯：如果存在，執行更新/刪除邏輯
             
-            # **採用單純的 Toggle 邏輯：存在就刪除** (與您的原代碼一致)
-            res = requests.delete(f"{SUPABASE_URL}/rest/v1/{FAVORITE_TABLE}", 
-                                  headers=headers, 
-                                  params={"stock_id": f"eq.{stock_id}"}); 
-            res.raise_for_status()
-            return jsonify({"message": f"{stock_name} ({stock_id}) 已從最愛移除", "favorite": False})
-            
+                 # 移除股票 (用於前端專門的刪除操作，或當用戶清空備註並點擊收藏按鈕)
+                 res = requests.delete(f"{SUPABASE_URL}/rest/v1/{FAVORITE_TABLE}", 
+                                     headers=headers, 
+                                     params={"stock_id": f"eq.{stock_id}"})
+                 res.raise_for_status()
+                 return jsonify({"message": f"{stock_name} ({stock_id}) 已從最愛移除", "favorite": False})
+           
         else:
-            # 🌟 修正點 9: 不存在則執行 POST (新增) - 包含 note
+            # 🌟 修復邏輯：不存在則執行 POST (新增)
             payload = {"stock_id": stock_id, "stock_name": stock_name, "note": note} 
             res = requests.post(f"{SUPABASE_URL}/rest/v1/{FAVORITE_TABLE}", 
                                  headers={**headers, "Content-Type": "application/json"}, 
-                                 json=payload); 
+                                 json=payload)
             res.raise_for_status()
-            return jsonify({"message": f"{stock_name} ({stock_id}) 已加入最愛 (備註: {note if note else '無'})", "favorite": True})
+            msg = f"{stock_name} ({stock_id}) 已加入最愛" + (f" (備註: {note})" if note else "")
+            return jsonify({"message": msg, "favorite": True})
             
     except Exception as e: return jsonify({"message": f"操作最愛失敗: {e}"}), 500
+
+# ----------------- 其他路由 (保持不變) -----------------
 
 @app.route('/favorites_clear', methods=['POST'])
 def favorites_clear():
     try:
-        # 使用 neq.null 條件刪除所有記錄
         res = requests.delete(f"{SUPABASE_URL}/rest/v1/{FAVORITE_TABLE}", headers=headers, params={"stock_id": "neq.null"}) 
-        res.raise_for_status(); return "<script>alert('已刪除所有最愛股票'); window.location.href='/'</script>"
+        res.raise_for_status()
+        return "<script>alert('已刪除所有最愛股票'); window.location.href='/'</script>"
     except Exception as e: return f"<h2>刪除最愛失敗: {e}</h2><a href='/'>返回首頁</a>"
 
 # ----------------- 運行程式 -----------------
 if __name__ == '__main__':
     import os
-    # ⚠️ 確保 SUPABASE 相關變數已定義
-    # 這是為了讓程式碼可運行而加的假定值，您應替換為真實的值
-    # SUPABASE_URL = "http://localhost:8000" 
-    # SUPABASE_KEY = "dummy_key"
-    
+    # ⚠️ 這裡需要您在實際運行環境中設定好 SUPABASE 相關變數
+    # 否則程式碼將會因為 SUPABASE_URL 未定義而失敗。
     port = int(os.environ.get("PORT", 5000))
-    # ⚠️ 請注意：在實際運行前，請將上方的 SUPABASE_URL 和 SUPABASE_KEY 替換成您的真實配置。
     app.run(host="0.0.0.0", port=port)
