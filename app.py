@@ -306,16 +306,20 @@ import pandas as pd
 import numpy as np
 
 # ----------------- 🌟 NEW: 主力行為偵測核心函數 -----------------
-def detect_smart_money_signals(df_tech, vsa_vol_multiplier=2, rsi_period=14):
+def detect_smart_money_signals(df_tech, vsa_vol_multiplier=2, rsi_period=14, ma_period_long=120):
     """
     主力行為偵測 - 判斷潛在的主力拉抬 (買入) 和拋售 (賣出) 訊號。
+    新增了「主力吸籌完成突破」的複合型訊號。
     """
     df = df_tech.copy()
-    df.reset_index(drop=True, inplace=True) # 確保索引連續
+    # 確保索引連續
+    if df.index.name != 'date':
+        df.reset_index(drop=True, inplace=True) 
 
-    # --- 計算基礎指標 (RSI, VWAP, VOL20) ---
+    # --- 計算基礎指標 (RSI, VWAP, VOL20, MA120) ---
     df['TP'] = (df['high'] + df['low'] + df['close']) / 3
     df['VOL20'] = df['volume'].rolling(20).mean()
+    df['MA20_Ref'] = df['close'].rolling(20).mean() # 將 MA60 作為新的長期參考 MA
     df['TPV'] = df['TP'] * df['volume']
     
     # VWAP 累積計算
@@ -338,48 +342,80 @@ def detect_smart_money_signals(df_tech, vsa_vol_multiplier=2, rsi_period=14):
     # --- 多頭訊號 (Buy Signals) ---
     # ----------------------------------------------------
     
-    # --- 1. VSA 強勢拉抬 (吸籌) ---
+    # --- 1. VSA 強勢拉抬 (吸籌) --- (維持原邏輯，作為單獨的強勢訊號)
     is_long_bull_k = (df['close'] > df['open']) & (df['Body_Ratio'] > 0.6) # 陽線且實體飽滿
     df['Signal_VSA_Strong'] = np.where(is_long_bull_k & is_high_volume, df['low'] * 0.99, np.nan)
     
-    # --- 2. 主力成本突破訊號：收盤站上 VWAP ---
+    # --- 2. 主力成本突破訊號：收盤站上 VWAP --- (維持原邏輯)
     df['Signal_VWAP_Break'] = np.where(
         (df['close'] > df['VWAP']) & (df['close'].shift(1).fillna(-np.inf) <= df['VWAP'].shift(1).fillna(-np.inf)),
         df['low'] * 0.995,
         np.nan
     )
     
+    # --- 3. 複合型主力吸籌突破 (Accumulation Breakout) --- 🌟 NEW 複合訊號
+    
+    # 判斷 A: 低檔區 (股價必須在 MA120 附近)
+    ma_ref = df['MA20_Ref'] # 使用 MA60 作為基準
+    # 容忍範圍設為 MA120 的 ±10%
+    #is_near_ma120 = (df['close'] < df['MA120'] * 1.10) & (df['close'] > df['MA120'] * 0.90)
+    is_near_ma20 = (df['low'] < df['MA20'] * 1.10) & (df['low'] > df['MA20'] * 0.90)
+    # 判斷 B: MA120 走平 (長期整理) - 用 MA120 過去 20 日的斜率判斷
+    # 假設 MA120 在 20 日內的波動小於 3%
+    ma20_max = df['MA20'].rolling(20).max()
+    ma20_min = df['MA20'].rolling(20).min()
+    #is_ma120_flat = (ma120_max / ma120_min) < 1.03 # 20天內 MA120 波動小於 3%
+    is_ma20_flat = (ma20_max / ma20_min) < 1.10 # 20天內 MA120 波動小於 3%
+    # 判斷 C: 突破 (收盤價突破前 60 日最高價)
+    #highest_close_60d = df['close'].shift(1).rolling(60).max()
+    highest_close_60d = df['close'].shift(1).rolling(20).max()
+    is_breaking_out = df['close'] > highest_close_60d
+    
+    # 綜合條件：低檔整理區 + 突破整理 + VSA 強勢拉抬 (is_high_volume & is_long_bull_k)
+    is_accumulation_breakout = (
+        is_near_ma20 & 
+        is_ma20_flat & 
+        is_breaking_out & 
+        is_high_volume & 
+        is_long_bull_k
+    )
+    
+    df['Signal_Accumulation_Breakout'] = np.where(is_accumulation_breakout, df['low'] * 0.985, np.nan)
+
+
     # ----------------------------------------------------
-    # --- 新增：空頭訊號 (Sell Signals) ---
+    # --- 空頭訊號 (Sell Signals) ---
     # ----------------------------------------------------
     
+    # ... (此處保留原有的 VSA_Weak, VWAP_BreakDown, TopDivergence 邏輯) ...
+
     # --- 4. VSA 恐慌拋售 (派發/出貨) ---
     is_long_bear_k = (df['close'] < df['open']) & (df['Body_Ratio'] > 0.6) # 陰線且實體飽滿
-    # 標記在 K 線頂部
     df['Signal_VSA_Weak'] = np.where(is_long_bear_k & is_high_volume, df['high'] * 1.01, np.nan)
 
     # --- 5. 主力成本跌破訊號：收盤跌破 VWAP ---
-    # 判斷今日收盤價跌破 VWAP，且昨日收盤價在 VWAP 之上 (跌破)
     df['Signal_VWAP_BreakDown'] = np.where(
         (df['close'] < df['VWAP']) & (df['close'].shift(1).fillna(np.inf) >= df['VWAP'].shift(1).fillna(np.inf)),
-        df['high'] * 1.005, # 標記在 K 線頂部附近
+        df['high'] * 1.005, 
         np.nan
     )
     
     # ----------------------------------------------------
-    # --- 3. 背離訊號 (Divergence & TopDivergence) ---
+    # --- 背離訊號 (Divergence & TopDivergence) ---
     # ----------------------------------------------------
+    # ... (此處保留原有的 Divergence 邏輯，並使用 shift(1) 避免未來函數) ...
     divergence_signal = [np.nan] * len(df)
     top_divergence_signal = [np.nan] * len(df)
     
     # 找出底分型和頂分型
+    # 註: 使用 shift(2) 和 shift(1) 是為了避免在計算當前 K 線時用到未來的 K 線數據
     df['Temp_Bottom_Pivot'] = (df['low'].shift(-1) > df['low']) & (df['low'].shift(1) > df['low'])
     df['Temp_Top_Pivot'] = (df['high'].shift(-1) < df['high']) & (df['high'].shift(1) < df['high'])
     
     bottom_pivots = df[df['Temp_Bottom_Pivot']].copy()
     top_pivots = df[df['Temp_Top_Pivot']].copy()
 
-    # --- 底部背離 (Signal_Divergence) ---
+    # 底部背離 (Signal_Divergence)
     if len(bottom_pivots) >= 2:
         for i in range(1, len(bottom_pivots)):
             B2_idx = bottom_pivots.index[i]
@@ -391,15 +427,13 @@ def detect_smart_money_signals(df_tech, vsa_vol_multiplier=2, rsi_period=14):
             if is_price_ll and is_rsi_hh:
                 divergence_signal[B2_idx] = df.loc[B2_idx, 'low'] * 0.998
 
-    # --- 新增：頂部背離 (Signal_TopDivergence) ---
+    # 頂部背離 (Signal_TopDivergence)
     if len(top_pivots) >= 2:
         for i in range(1, len(top_pivots)):
             T2_idx = top_pivots.index[i]
             T1_idx = top_pivots.index[i-1]
             
-            # 確認價格頂頂高 (Price High Higher)
             is_price_hh = df.loc[T2_idx, 'high'] > df.loc[T1_idx, 'high']
-            # 確認 RSI 頂底低 (RSI Low Lower)
             is_rsi_ll = df.loc[T2_idx, 'RSI'] < df.loc[T1_idx, 'RSI']
 
             if is_price_hh and is_rsi_ll:
@@ -412,7 +446,8 @@ def detect_smart_money_signals(df_tech, vsa_vol_multiplier=2, rsi_period=14):
     # --- 訊號優先級清理 (避免多空訊號衝突) ---
     # ----------------------------------------------------
     
-    is_any_strong_buy = df['Signal_VSA_Strong'].notna() | df['Signal_VWAP_Break'].notna()
+    # 將新的複合訊號加入強勢買入的判斷
+    is_any_strong_buy = df['Signal_VSA_Strong'].notna() | df['Signal_VWAP_Break'].notna() | df['Signal_Accumulation_Breakout'].notna()
     is_any_strong_sell = df['Signal_VSA_Weak'].notna() | df['Signal_VWAP_BreakDown'].notna()
 
     # 1. 買入訊號優先：強勢買入日清除所有看跌/賣出訊號
@@ -423,12 +458,13 @@ def detect_smart_money_signals(df_tech, vsa_vol_multiplier=2, rsi_period=14):
     # 2. 賣出訊號優先：強勢賣出日清除所有看漲/買入訊號
     df.loc[is_any_strong_sell, 'Signal_VSA_Strong'] = np.nan
     df.loc[is_any_strong_sell, 'Signal_VWAP_Break'] = np.nan
+    df.loc[is_any_strong_sell, 'Signal_Accumulation_Breakout'] = np.nan # 清除新的複合訊號
     df.loc[is_any_strong_sell, 'Signal_Divergence'] = np.nan
     
-    # 最終回傳所有訊號欄位
+    # 最終回傳所有訊號欄位 (新增 'Signal_Accumulation_Breakout')
     return df[['date', 
-               'Signal_VSA_Strong', 'Signal_VWAP_Break', 'Signal_Divergence', 
-               'Signal_VSA_Weak', 'Signal_VWAP_BreakDown', 'Signal_TopDivergence']]
+                'Signal_VSA_Strong', 'Signal_VWAP_Break', 'Signal_Divergence', 'Signal_Accumulation_Breakout',
+                'Signal_VSA_Weak', 'Signal_VWAP_BreakDown', 'Signal_TopDivergence']]
 # ----------------- 整合生成圖表 (含趨勢分析和訊號檢查) -----------------
 import pandas as pd
 import numpy as np
@@ -479,7 +515,8 @@ def generate_chart(stock_id_clean, start_date=None, end_date=None, simple_mode=F
     df_final, last_pivot_date, last_pivot_type = filter_pivots_for_stroke(df_pivot_data, df_tech.copy())
 
     # --- 🌟 主力信號偵測 ---
-    df_smart_signals = detect_smart_money_signals(df_final.copy()) 
+    #df_smart_signals = detect_smart_money_signals(df_final.copy()) 
+    df_smart_signals = detect_smart_money_signals(df_final.copy(), vsa_vol_multiplier=3)
     df_final = df_final.merge(df_smart_signals, on='date', how='left')
     
     # --- 3. 趨勢分析與信號檢查 ---
@@ -550,6 +587,22 @@ def generate_chart(stock_id_clean, start_date=None, end_date=None, simple_mode=F
         marker=dict(size=10, symbol='triangle-up', color='orange', line=dict(width=1, color='black')),
         name='VWAP 成本突破',
         hovertext="主力成本突破",
+        hoverinfo='text'
+    ), row=1, col=1)
+    
+    # 🌟 NEW: 複合型主力吸籌突破 (拉抬啟動) - 使用五角星/火箭圖案
+    fig.add_trace(go.Scatter(
+        x=df_display['date'],
+        y=df_display['Signal_Accumulation_Breakout'],
+        mode='markers',
+        marker=dict(
+            size=14, 
+            symbol='star', # 使用五角星 ⭐ 代表啟動，與圖例中的🚀相呼應
+            color='gold', 
+            line=dict(width=1.5, color='darkgreen')
+        ),
+        name='🚀 主力吸籌突破',
+        hovertext="主力吸籌完成，啟動拉抬 (複合訊號)",
         hoverinfo='text'
     ), row=1, col=1)
 
