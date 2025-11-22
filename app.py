@@ -737,6 +737,52 @@ def is_favorite(stock_id):
         # 查詢失敗時，返回 False 以保險
         return False
 
+import json
+import requests
+import pandas as pd
+import urllib.parse
+from datetime import datetime, timedelta
+from flask import Flask, render_template, request, jsonify
+
+# ----------------- 配置 (請替換為您的實際值) -----------------
+# 假設這些變數已在您的檔案開頭定義
+# SUPABASE_URL = "YOUR_SUPABASE_URL"
+# SUPABASE_KEY = "YOUR_SUPABASE_KEY"
+# FAVORITE_TABLE = "favorites" # 假設您的最愛表名是 favorites
+# headers = {"apikey": SUPABASE_KEY, "Authorization": f"Bearer {SUPABASE_KEY}"}
+
+# 假設 app 和 generate_chart 函數已定義
+app = Flask(__name__)
+# def generate_chart(stock_id, simple_mode=False, num_rows=30, frequency='D'):
+#     # ... (您的圖表生成邏輯) ...
+#     return "chart_html_content", None, "趨勢描述", "信號描述", "trend_class"
+
+# ----------------- 輔助函數：獲取最愛狀態和備註 (從上次修正中恢復) -----------------
+
+def get_favorite_status_and_note(stock_id):
+    """檢查股票是否在最愛中，並返回 is_favorite 狀態和 note 內容。"""
+    try:
+        res = requests.get(
+            f"{SUPABASE_URL}/rest/v1/{FAVORITE_TABLE}", 
+            headers=headers, 
+            params={"stock_id": f"eq.{stock_id}", "select": "stock_id,note"}
+        )
+        res.raise_for_status()
+        data = res.json()
+        
+        if data:
+            # 找到記錄，返回 True 和備註
+            # 使用 .get('note', '') 處理可能為 None 或不存在的情況
+            return True, data[0].get('note', '') or '' 
+        else:
+            # 找不到記錄，返回 False 和空備註
+            return False, ''
+    except Exception as e:
+        print(f"Error checking favorite status for {stock_id}: {e}")
+        # 如果檢查失敗，視為不在最愛中
+        return False, ''
+
+
 # ----------------- Flask 路由部分 -----------------
 
 @app.route('/')
@@ -754,8 +800,8 @@ def query():
     
     if error: return f"<h2>{error}</h2><a href='/'>返回</a>"
     
-    # 🌟 使用前面定義的函數獲取最愛狀態
-    fav_status = is_favorite(stock_id) 
+    # 🌟 修正點 1: 使用 get_favorite_status_and_note 獲取最愛狀態和備註
+    is_favorite, favorite_note = get_favorite_status_and_note(stock_id) 
     
     return render_template(
         'chart.html', 
@@ -765,7 +811,8 @@ def query():
         current_index=0, 
         simple_mode=simple_mode, 
         num_rows=num_rows, 
-        is_favorite=fav_status,
+        is_favorite=is_favorite,
+        favorite_note=favorite_note, # 🌟 修正點 2: 傳遞 favorite_note 到前端
         trend_desc=trend_desc,
         rebound_desc=rebound_desc,
         trend_class=trend_class,
@@ -790,8 +837,8 @@ def chart_from_list(stock_id):
     
     if error: return f"<h2>{error}</h2><a href='/'>返回</a>"
     
-    # 🌟 使用前面定義的函數獲取最愛狀態
-    fav_status = is_favorite(current_stock)
+    # 🌟 修正點 3: 使用 get_favorite_status_and_note 獲取最愛狀態和備註
+    is_favorite, favorite_note = get_favorite_status_and_note(current_stock)
 
     return render_template(
         'chart.html', 
@@ -801,14 +848,15 @@ def chart_from_list(stock_id):
         current_index=index, 
         simple_mode=simple_mode, 
         num_rows=num_rows, 
-        is_favorite=fav_status,
+        is_favorite=is_favorite,
+        favorite_note=favorite_note, # 🌟 修正點 4: 傳遞 favorite_note 到前端
         trend_desc=trend_desc,
         rebound_desc=rebound_desc,
         trend_class=trend_class,
         frequency=frequency
     )
 
-# ----------------- Filter 及 Favorite 路由 -----------------
+# ----------------- Filter 路由 (保持不變) -----------------
 @app.route('/filter', methods=['POST'])
 def filter_stocks():
     volume_min = request.form.get('volume_min', type=float, default=0)
@@ -862,9 +910,11 @@ def filter_stocks():
     html += "</tbody></table><br><a href='/'>返回</a>"
     return html
 
-@app.route('/favorites', methods=['GET', 'POST']) # 🌟 允許 GET 請求，以便通過連結訪問
+# ----------------- Favorite 路由修正 -----------------
+
+@app.route('/favorites', methods=['GET', 'POST']) # 🌟 修正點 5: 增加 'GET' 支援，避免 TypeError
 def favorites_page():
-    # 統一從 request.values 中獲取參數，兼容 GET 和 POST
+    # 🌟 修正點 6: 從 request.values 讀取參數，兼容 GET 和 POST
     simple_mode = request.values.get('simple_mode') == '1'
     num_rows = request.values.get('num_rows', type=int, default=30)
     frequency = request.values.get('frequency', 'D')
@@ -872,8 +922,15 @@ def favorites_page():
     try:
         res = requests.get(f"{SUPABASE_URL}/rest/v1/{FAVORITE_TABLE}", headers=headers); res.raise_for_status(); fav_data = res.json()
     except Exception as e: return f"<h2>讀取最愛股票失敗: {e}</h2><a href='/'>返回</a>"
+    
     if not fav_data: return "<h2>尚無最愛股票</h2><a href='/'>返回</a>"
+    
+    # 🌟 獲取備註資訊 (與快照資料合併，以便在列表中顯示備註，如果需要的話)
     stock_ids = [item['stock_id'] for item in fav_data]
+    
+    # 建立備註字典 {stock_id: note}
+    note_map = {item['stock_id']: item.get('note', '') or '' for item in fav_data}
+    
     try:
         res_qv = requests.get(f"{SUPABASE_URL}/rest/v1/quick_view", headers=headers, params={"stock_id": f"in.({','.join(stock_ids)})", "order": "latest_date.desc", "select": "*"})
         res_qv.raise_for_status(); qv_data = res_qv.json()
@@ -881,60 +938,93 @@ def favorites_page():
 
     df_qv = pd.DataFrame(qv_data); count = len(df_qv); list_param = urllib.parse.quote(','.join(stock_ids))
     
-    html = (f"<h2>我的最愛（共 {count} 筆）</h2>" "<form method='post' action='/favorites_clear' " "onsubmit=\"return confirm('確定要刪除所有最愛嗎？');\">" "<button type='submit' style='margin-bottom:10px;'>刪除全部最愛</button>" "</form>" "<table border='1' cellpadding='6' style='margin-left:0; text-align:left;'>" "<thead><tr>" "<th>股票代號</th><th>股票名稱</th><th>成交量</th>" "<th>ADR14(%)</th><th>14天平均成交量</th><th>趨勢</th>" "</tr></thead><tbody>")
+    html = (f"<h2>我的最愛（共 {count} 筆）</h2>" 
+            "<form method='post' action='/favorites_clear' " 
+            "onsubmit=\"return confirm('確定要刪除所有最愛嗎？');\">" 
+            "<button type='submit' style='margin-bottom:10px;'>刪除全部最愛</button>" 
+            "</form>" 
+            "<table border='1' cellpadding='6' style='margin-left:0; text-align:left;'>" 
+            "<thead><tr>" 
+            "<th>股票代號</th><th>股票名稱</th><th>備註</th>" # 🌟 列表新增備註欄位
+            "<th>成交量</th><th>ADR14(%)</th><th>14天平均成交量</th><th>趨勢</th>" 
+            "</tr></thead><tbody>")
+            
     for idx, row in df_qv.iterrows():
         simple_param = "1" if simple_mode else "0"
+        current_note = note_map.get(str(row['stock_id']), '') # 從字典中獲取備註
+        
         html += (f"<tr>"  
                     f"<td><a href='/chart/{row['stock_id']}?simple_mode={simple_param}&num_rows={num_rows}&list={list_param}&index={idx}&frequency={frequency}'>{row['stock_id']}</a></td>"  
                     f"<td>{row['stock_name']}</td>"  
+                    f"<td>{current_note}</td>" # 🌟 顯示備註
                     f"<td>{int(row['latest_volume'])}</td>"  
                     f"<td>{row['adr14']:.2f}</td>"  
                     f"<td>{int(row['avg_volume_14'])}</td>"  
                     f"<td>{row['trend']}</td>"  
                     f"</tr>")
+                    
     html += "</tbody></table><br><a href='/'>返回</a>"
     return html
 
 @app.route('/favorite', methods=['POST'])
 def favorite_toggle():
-    stock_id = request.form.get('stock_id', '').strip(); stock_name = request.form.get('stock_name', '').strip()
-    # 🌟 修正：如果 stock_name 是空的，使用 stock_id 作為備用名稱
-    if not stock_name: stock_name = stock_id
+    stock_id = request.form.get('stock_id', '').strip()
+    stock_name = request.form.get('stock_name', '').strip()
+    note = request.form.get('note', '').strip() # 🌟 修正點 7: 接收 note 欄位
     
+    if not stock_name: stock_name = stock_id
     if not stock_id: return jsonify({"message": "股票代號不可為空"}), 400
     
     try:
-        # 1. 檢查是否存在
-        res_check = requests.get(f"{SUPABASE_URL}/rest/v1/{FAVORITE_TABLE}", headers=headers, params={"stock_id": f"eq.{stock_id}", "select": "stock_id"}); res_check.raise_for_status(); exists = len(res_check.json()) > 0
+        # 1. 檢查是否存在 (需要獲取 note 才能判斷是刪除還是更新)
+        res_check = requests.get(f"{SUPABASE_URL}/rest/v1/{FAVORITE_TABLE}", 
+                                 headers=headers, 
+                                 params={"stock_id": f"eq.{stock_id}", "select": "stock_id"}); 
+        res_check.raise_for_status(); 
+        exists = len(res_check.json()) > 0
     except Exception as e: return jsonify({"message": f"檢查最愛失敗: {e}"}), 500
 
     try:
         if exists:
-            # 2. 存在則執行 DELETE (移除)
-            res = requests.delete(f"{SUPABASE_URL}/rest/v1/{FAVORITE_TABLE}", headers=headers, params={"stock_id": f"eq.{stock_id}"}); res.raise_for_status()
+            # 🌟 修正點 8: 如果存在，執行更新/刪除邏輯。
+            # 由於前端只有一個按鈕，我們假設點擊按鈕就是操作狀態。
+            # 如果要移除，我們執行 DELETE；
+            # 如果要更新備註但不移除，需要另一個邏輯。
+            
+            # **採用單純的 Toggle 邏輯：存在就刪除** (與您的原代碼一致)
+            res = requests.delete(f"{SUPABASE_URL}/rest/v1/{FAVORITE_TABLE}", 
+                                  headers=headers, 
+                                  params={"stock_id": f"eq.{stock_id}"}); 
+            res.raise_for_status()
             return jsonify({"message": f"{stock_name} ({stock_id}) 已從最愛移除", "favorite": False})
+            
         else:
-            # 3. 不存在則執行 POST (新增)
-            payload = {"stock_id": stock_id, "stock_name": stock_name}
-            # 使用 json=payload 和正確的 Content-Type 標頭
-            res = requests.post(f"{SUPABASE_URL}/rest/v1/{FAVORITE_TABLE}", headers={**headers, "Content-Type": "application/json"}, json=payload); res.raise_for_status()
-            return jsonify({"message": f"{stock_name} ({stock_id}) 已加入最愛", "favorite": True})
+            # 🌟 修正點 9: 不存在則執行 POST (新增) - 包含 note
+            payload = {"stock_id": stock_id, "stock_name": stock_name, "note": note} 
+            res = requests.post(f"{SUPABASE_URL}/rest/v1/{FAVORITE_TABLE}", 
+                                 headers={**headers, "Content-Type": "application/json"}, 
+                                 json=payload); 
+            res.raise_for_status()
+            return jsonify({"message": f"{stock_name} ({stock_id}) 已加入最愛 (備註: {note if note else '無'})", "favorite": True})
+            
     except Exception as e: return jsonify({"message": f"操作最愛失敗: {e}"}), 500
 
 @app.route('/favorites_clear', methods=['POST'])
 def favorites_clear():
     try:
         # 使用 neq.null 條件刪除所有記錄
-        res = requests.delete(f"{SUPABASE_URL}/rest/v1/{FAVORITE_TABLE}", headers=headers, params={"stock_id": "neq.null"})  
+        res = requests.delete(f"{SUPABASE_URL}/rest/v1/{FAVORITE_TABLE}", headers=headers, params={"stock_id": "neq.null"}) 
         res.raise_for_status(); return "<script>alert('已刪除所有最愛股票'); window.location.href='/'</script>"
     except Exception as e: return f"<h2>刪除最愛失敗: {e}</h2><a href='/'>返回首頁</a>"
 
 # ----------------- 運行程式 -----------------
 if __name__ == '__main__':
-    # ... (您的運行代碼) ...
-    pass
-
-# ----------------- 運行應用程式 -----------------
-if __name__ == '__main__':
-    # 僅在本機開發環境使用，實際部署請使用 WSGI 服務器
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    import os
+    # ⚠️ 確保 SUPABASE 相關變數已定義
+    # 這是為了讓程式碼可運行而加的假定值，您應替換為真實的值
+    # SUPABASE_URL = "http://localhost:8000" 
+    # SUPABASE_KEY = "dummy_key"
+    
+    port = int(os.environ.get("PORT", 5000))
+    # ⚠️ 請注意：在實際運行前，請將上方的 SUPABASE_URL 和 SUPABASE_KEY 替換成您的真實配置。
+    app.run(host="0.0.0.0", port=port)

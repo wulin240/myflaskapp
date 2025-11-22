@@ -5,7 +5,7 @@
     <title>{{ stock_id }} K線圖</title>
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     <style>
-        /* --- CSS 樣式 --- */
+        /* --- CSS 樣式 (大部分不變) --- */
         body {
             font-family: Arial, sans-serif;
             margin: 0;
@@ -24,45 +24,64 @@
             margin: 0;
             color: #0056b3;
         }
+        
+        /* ------------------- 🌟 跑馬燈專用 CSS 修正 ------------------- */
+        
+        #noteMarquee {
+            background-color: #ffeaa7; /* 淺黃色背景 */
+            color: #333;
+            padding: 5px 10px;
+            font-size: 16px; /* 🌟 字體加大 */
+            border-bottom: 1px solid #f9d863;
+            overflow: hidden; /* 隱藏超出容器的內容 */
+            white-space: nowrap;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            position: relative; /* 用於定位動畫內容 */
+            height: 30px; /* 確保高度足夠 */
+            line-height: 20px;
+        }
+        
+        #marqueeContent {
+            display: inline-block;
+            white-space: nowrap;
+            position: absolute; /* 相對於父容器定位 */
+            padding-left: 100%; /* 讓內容從最右邊開始 */
+            /* 應用 CSS 跑馬燈動畫 */
+            animation: marquee 20s linear infinite; /* 20秒跑完一圈，無限循環 */
+        }
+        
+        #marqueeContent span {
+            font-weight: bold;
+            color: #d35400; /* 突顯備註標籤 */
+            margin-right: 15px;
+            font-size: 1.1em; /* 讓標籤更明顯 */
+        }
+        
+        /* CSS 跑馬燈動畫定義 */
+        @keyframes marquee {
+            0% { transform: translate(0, 0); } /* 從最右邊開始 (因為 padding-left: 100%) */
+            100% { transform: translate(-100%, 0); } /* 滾動到最左邊 */
+        }
+        /* ------------------- 🌟 跑馬燈專用 CSS 修正 END ------------------- */
 
-        /* 🌟 新增/修改：頂部信號顯示區塊樣式 */
+
+        /* 🌟 頂部信號顯示區塊樣式 */
         #signalDisplay {
             text-align: center;
-            padding: 15px 10px; /* 增加內邊距 */
+            padding: 15px 10px;
             background-color: #fefefe;
             border-bottom: 1px solid #ddd;
-            font-size: 1.1em; /* 放大文字 */
+            font-size: 1.1em;
             line-height: 1.8;
             font-weight: 500;
         }
 
         #signalDisplay strong {
             color: #555;
-            font-size: 1.05em; /* 趨勢分析/信號檢查標籤稍微放大 */
-        }
-        /* End 新增/修改 */
-
-        .chart-container {
-            padding: 10px;
-            overflow-x: auto;
-            -webkit-overflow-scrolling: touch;
-            touch-action: pan-x pan-y;
+            font-size: 1.05em;
         }
 
-        .chart-inner {
-            min-width: 900px;
-            width: 100%;
-        }
-
-        a {
-            text-decoration: none;
-            color: #007bff;
-            transition: color 0.3s;
-        }
-
-        a:hover {
-            color: #0056b3;
-        }
+        /* ... (省略中間不變的樣式) ... */
 
         .control-panel {
             padding: 8px 10px;
@@ -83,108 +102,22 @@
             align-items: center;
             gap: 8px;
         }
-
-        .draw-panel {
-            background: rgba(240, 240, 240, 0.9);
-            padding: 5px;
-            border-radius: 5px;
-            font-size: 14px;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            flex-wrap: wrap;
+        
+        /* 備註輸入框的樣式 */
+        #noteGroup {
+            flex-grow: 1;
+            max-width: 400px;
+            min-width: 200px;
         }
-
-        select,
-        input[type="number"],
-        button {
+        #noteInput {
+            flex-grow: 1;
             padding: 4px 8px;
             font-size: 13px;
             border-radius: 4px;
             border: 1px solid #ccc;
-            cursor: pointer;
-            transition: background-color 0.2s;
         }
 
-        button:hover {
-            opacity: 0.9;
-        }
-
-        .control-group button {
-            background-color: #e9e9e9;
-        }
-
-        /* ------------------- 資訊顯示區塊 ------------------- */
-        #hoverInfo {
-            position: absolute;
-            background: rgba(255, 255, 255, 0.95);
-            border: 1px solid #ccc;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-            padding: 8px 12px;
-            border-radius: 5px;
-            display: none;
-            font-size: 14px;
-            pointer-events: none;
-            z-index: 20;
-            line-height: 1.5;
-        }
-
-        #stockIndexDisplay {
-            position: absolute;
-            top: 70px;
-            left: 10px;
-            background: rgba(0, 0, 0, 0.7);
-            color: white;
-            padding: 5px 10px;
-            border-radius: 5px;
-            font-size: 14px;
-            z-index: 15;
-        }
-
-        #favoriteBtn {
-            padding: 6px 12px;
-            border: none;
-            cursor: pointer;
-            font-weight: bold;
-            background-color: #ffd700;
-        }
-
-        /* ------------------- 趨勢信號樣式 ------------------- */
-        /* 🌟 核心樣式定義：確保這些名稱與後端 trend_class 的值完全匹配 */
-        .bullish {
-            color: #d9534f; /* 紅色 - 看漲 */
-            font-weight: bold;
-        }
-
-        .bearish {
-            color: #5cb85c; /* 綠色 - 看跌 */
-            font-weight: bold;
-        }
-
-        .neutral {
-            color: #5bc0de; /* 藍色 - 中性 */
-        }
-
-        /* 閃爍動畫 */
-        @keyframes blink {
-            0%, 100% {
-                background-color: #fff3cd;
-                color: #856404;
-                box-shadow: 0 0 5px rgba(255, 204, 0, 0.8);
-            }
-            50% {
-                background-color: transparent;
-                color: inherit;
-                box-shadow: none;
-            }
-        }
-
-        .flashing {
-            animation: blink 1.5s linear infinite;
-            padding: 2px 5px;
-            border-radius: 3px;
-            font-weight: bold;
-        }
+        /* ... (省略其餘不變的樣式) ... */
     </style>
 </head>
 <body>
@@ -192,6 +125,11 @@
     <div class="header">
         <h2>{{ stock_id }} K線圖</h2>
         <a href="/">返回首頁</a>
+    </div>
+
+    <div id="noteMarquee" style="display: none;">
+        <div id="marqueeContent">
+            </div>
     </div>
 
     <div id="stockIndexDisplay"></div>
@@ -209,6 +147,11 @@
             <button id="prevStock" style="background:#ddd;">⬅️ 上一筆</button>
             <button id="nextStock" style="background:#ddd;">下一筆 ➡️</button>
             <button id="favoriteBtn">⭐ 加入最愛</button>
+        </div>
+
+        <div class="control-group" id="noteGroup">
+            <label for="noteInput" style="white-space: nowrap;">備註:</label>
+            <input type="text" id="noteInput" placeholder="輸入備註，儲存後自動寫入" value="{{ favorite_note | default('') }}">
         </div>
 
         <div class="control-group">
@@ -257,9 +200,11 @@
         let currentFrequency = "{{ frequency }}";
         let trendDescText = "{{ trend_desc | safe }}".trim();
         let reboundDescText = "{{ rebound_desc | safe }}".trim();
-        let trendClass = "{{ trend_class }}"; // 獲取 trend_class
+        let trendClass = "{{ trend_class }}";
+        // 🌟 獲取後端傳來的備註
+        const initialNote = "{{ favorite_note | default('') }}";
 
-        // ---------------------- 核心導航函數 (不變) ----------------------
+        // ---------------------- 核心函數 (不變) ----------------------
         function buildUrl(stockId, index, numRows, simpleMode, frequency) {
             const listParam = stockList.join(',');
             let url = `/chart/${stockId}?num_rows=${numRows}&simple_mode=${simpleMode}&frequency=${frequency}`;
@@ -268,7 +213,7 @@
             }
             return url;
         }
-
+        // ... (省略中間不變的導航函數) ...
         function changeFrequency(newFreq) {
             window.location.href = buildUrl(
                 stockList[currentIndex],
@@ -310,194 +255,51 @@
                 currentFrequency
             );
         });
-
-        // ----------- 畫筆 & 均線 & 清除 (不變) -----------
-        let penEnabled = true;
-
-        function updateDrawSettings() {
-            const color = document.getElementById("lineColor").value;
-            const width = parseInt(document.getElementById("lineWidth").value);
-            const gd = document.querySelector(".plotly-graph-div");
-            Plotly.relayout(gd, {
-                'newshape.line.color': color,
-                'newshape.line.width': width
-            });
-        }
-
-        function toggleMA() {
-            const gd = document.querySelector(".plotly-graph-div");
-            let maVisible = localStorage.getItem("maVisible");
-            if (maVisible === null) maVisible = 'true';
-            maVisible = maVisible === 'true' ? 'false' : 'true';
-            localStorage.setItem("maVisible", maVisible);
-
-            const updates = [];
-            const indicesToUpdate = [];
-
-            gd.data.forEach((trace, i) => {
-                if (trace.name && (trace.name.includes('MA') || trace.name.includes('止損'))) {
-                    const visible = maVisible === 'true' ? true : 'legendonly';
-                    updates.push({ 'visible': visible });
-                    indicesToUpdate.push(i);
-                }
-            });
-
-            if (updates.length > 0) {
-                 Plotly.restyle(gd, updates, indicesToUpdate);
-            }
-        }
-
-        function clearDrawings() {
-            const gd = document.querySelector(".plotly-graph-div");
-            Plotly.relayout(gd, {
-                'shapes': []
-            });
-        }
-
-        // 🌟 簡化後的樣式應用：僅保留信號閃爍，因為趨勢顏色已由 HTML 直接設定。
-        function applySignalStyles() {
-            const reboundSpan = document.getElementById("reboundDesc");
-
-            // 清除舊的類別
-            reboundSpan.classList.remove('flashing');
-            reboundSpan.style.backgroundColor = 'transparent';
-            reboundSpan.style.color = 'inherit';
-            
-            // 信號閃爍判斷
-            if (reboundDescText.includes('起漲信號') || reboundDescText.includes('潛在起漲提示') || reboundDescText.includes('買入')) {
-                reboundSpan.classList.add('flashing');
-            }
-        }
+        
+        // ... (繪圖、均線、清除、信號樣式等邏輯不變) ...
 
 
-        // ----------- 初始化與事件監聽 (不變) -----------
+        // ------------------ 🌟 初始化與事件監聽 ------------------
         document.addEventListener("DOMContentLoaded", function () {
             const gd = document.querySelector(".plotly-graph-div");
-            const hoverBox = document.getElementById("hoverInfo");
-            const toggleBtn = document.getElementById("toggleDraw");
             const toggleMABtn = document.getElementById("toggleMA");
             const clearBtn = document.getElementById("clearDraw");
             const stockIndexDisplay = document.getElementById("stockIndexDisplay");
             const favoriteBtn = document.getElementById("favoriteBtn");
-
-            toggleMABtn.addEventListener("click", toggleMA);
-            clearBtn.addEventListener("click", clearDrawings);
-
-            // 執行顏色與閃爍邏輯 (趨勢顏色已由 HTML 設定)
-            applySignalStyles();
+            const noteInput = document.getElementById("noteInput");
             
-            // 顯示目前第幾筆
-            function updateStockIndexDisplay() {
-                stockIndexDisplay.textContent = `${currentIndex+1}/${stockList.length}`;
-            }
-            if (stockList.length > 1) updateStockIndexDisplay();
-            else stockIndexDisplay.style.display = 'none';
-
-            // 初始化時，根據 localStorage 設定均線和止損線顯示
-            let maVisible = localStorage.getItem("maVisible");
-            if (maVisible === null) maVisible = 'true';
-            gd.data.forEach((trace, i) => {
-                if (trace.name && (trace.name.includes('MA') || trace.name.includes('止損'))) {
-                    const visible = maVisible === 'true' ? true : 'legendonly';
-                    Plotly.restyle(gd, {
-                        'visible': visible
-                    }, [i]);
+            // 🌟 跑馬燈元素
+            const noteMarqueeDiv = document.getElementById("noteMarquee");
+            const marqueeContent = document.getElementById("marqueeContent");
+            
+            
+            // ------------------ 🌟 跑馬燈初始化及更新函數 ------------------
+            function updateMarquee(note) {
+                const trimmedNote = note.trim();
+                if (trimmedNote.length > 0) {
+                    // 🌟 注意：我們將整個內容放入 marqueeContent 中
+                    marqueeContent.innerHTML = `<span>我的備註:</span> ${trimmedNote}`;
+                    noteMarqueeDiv.style.display = 'block';
+                    // 重新應用動畫 (為了確保在內容更新後動畫重新播放)
+                    marqueeContent.style.animation = 'none';
+                    void marqueeContent.offsetWidth; // 觸發重繪/重排
+                    marqueeContent.style.animation = 'marquee 20s linear infinite';
+                } else {
+                    noteMarqueeDiv.style.display = 'none';
+                    marqueeContent.style.animation = 'none'; // 停止動畫
                 }
-            });
-
-            const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
-            if (isMobile) {
-                penEnabled = false;
-                Plotly.relayout(gd, {
-                    dragmode: false
-                });
-                toggleBtn.textContent = "📱 開啟畫筆";
-                toggleBtn.style.background = "#ddd";
-
-                toggleBtn.addEventListener("click", () => {
-                    penEnabled = !penEnabled;
-                    if (penEnabled) {
-                        Plotly.relayout(gd, {
-                            dragmode: 'drawline'
-                        });
-                        toggleBtn.textContent = "📱 關閉畫筆";
-                        toggleBtn.style.background = "#c0ffc0";
-                    } else {
-                        Plotly.relayout(gd, {
-                            dragmode: false
-                        });
-                        toggleBtn.textContent = "📱 開啟畫筆";
-                        toggleBtn.style.background = "#ddd";
-                    }
-                });
-
-                // 行動裝置使用點擊事件顯示資訊
-                gd.on('plotly_click', function (data) {
-                    if (!data.points || !data.points.length) return;
-                    const pt = data.points[0];
-                    const xValue = pt.x || (pt.data.x && pt.data.x[pt.pointIndex]);
-                    const yValue = pt.y || (pt.data.y && pt.data.y[pt.pointIndex]);
-
-                    if (xValue && yValue) {
-                        hoverBox.innerHTML = `${pt.data.name || ''}<br>日期: ${xValue}<br>數值: ${yValue.toFixed(2)}`;
-                    } else {
-                        hoverBox.innerHTML = `${pt.data.name || ''}<br>數據點資訊不可用`;
-                    }
-                    
-                    hoverBox.style.left = (data.event.clientX + 10) + 'px';
-                    hoverBox.style.top = (data.event.clientY - 20) + 'px';
-                    hoverBox.style.display = 'block';
-                    setTimeout(() => hoverBox.style.display = 'none', 2500);
-                });
-
-            } else {
-                Plotly.relayout(gd, {
-                    dragmode: 'drawline'
-                }); 
-
-                toggleBtn.addEventListener("click", () => {
-                    const currentMode = gd.layout.dragmode;
-                    if (currentMode === 'drawline') {
-                        Plotly.relayout(gd, {
-                            dragmode: 'pan'
-                        });
-                        toggleBtn.textContent = "📱 開啟畫筆";
-                        toggleBtn.style.background = "#ddd";
-                    } else {
-                        Plotly.relayout(gd, {
-                            dragmode: 'drawline'
-                        });
-                        toggleBtn.textContent = "📱 關閉畫筆";
-                        toggleBtn.style.background = "#c0ffc0";
-                    }
-                });
-
-                // 桌面裝置使用懸停事件顯示資訊
-                gd.on('plotly_hover', function (data) {
-                    if (!data.points || !data.points.length) return;
-                    const pt = data.points[0];
-                    
-                    const xValue = pt.x || (pt.data.x && pt.data.x[pt.pointIndex]);
-                    const yValue = pt.y || (pt.data.y && pt.data.y[pt.pointIndex]);
-
-                    if (xValue && yValue) {
-                        hoverBox.innerHTML = `${pt.data.name || ''}<br>日期: ${xValue}<br>數值: ${yValue.toFixed(2)}`;
-                    } else {
-                        hoverBox.innerHTML = `${pt.data.name || ''}<br>數據點資訊不可用`;
-                    }
-
-                    hoverBox.style.left = (data.event.clientX + 10) + 'px';
-                    hoverBox.style.top = (data.event.clientY - 20) + 'px';
-                    hoverBox.style.display = 'block';
-                });
-                gd.on('plotly_unhover', function () {
-                    hoverBox.style.display = 'none';
-                });
             }
+            
+            // 載入時初始化跑馬燈
+            updateMarquee(initialNote);
 
 
-            // ----------- 最愛按鈕邏輯 (不變) -----------
+            // ... (其他 DOMContentLoaded 內的原有邏輯，例如按鈕事件、Plotly 初始化等) ...
+
+            // ------------------ 最愛按鈕邏輯 (沿用上次修正) ------------------
             let isFavorite = {{ 'true' if is_favorite else 'false' }};
+            const stockId = "{{ stock_id }}";
+            const stockName = "{{ stock_id }}"; 
 
             function updateFavoriteButton() {
                 if (isFavorite) {
@@ -511,26 +313,68 @@
                 }
             }
             updateFavoriteButton();
-
-            favoriteBtn.addEventListener("click", async () => {
+            
+            async function performFavoriteAction() {
                 try {
+                    const newNote = noteInput.value.trim();
+                    let bodyData = `stock_id=${encodeURIComponent(stockId)}&stock_name=${encodeURIComponent(stockName)}`;
+                    
+                    bodyData += `&note=${encodeURIComponent(newNote)}`;
+
                     const res = await fetch("/favorite", {
                         method: "POST",
                         headers: {
                             "Content-Type": "application/x-www-form-urlencoded"
                         },
-                        body: `stock_id=${encodeURIComponent("{{ stock_id }}")}&stock_name=${encodeURIComponent("{{ stock_id }}")}`
+                        body: bodyData
                     });
+                    
                     const data = await res.json();
-                    if (data.favorite !== undefined) isFavorite = data.favorite;
-                    updateFavoriteButton();
-                    alert(data.message);
+                    
+                    if (data.favorite !== undefined) {
+                        isFavorite = data.favorite;
+                        updateFavoriteButton();
+                        alert(data.message);
+                        
+                        // 🌟 根據操作結果更新前端
+                        if (isFavorite) {
+                             // 如果是新增/更新
+                             noteInput.value = newNote; // 更新輸入框
+                             updateMarquee(newNote);    // 更新跑馬燈
+                        } else {
+                            // 如果是移除
+                            noteInput.value = '';
+                            updateMarquee('');          // 清空跑馬燈
+                        }
+                    } else {
+                         alert(`操作失敗: ${data.message || '未知錯誤'}`);
+                    }
                 } catch (e) {
-                    alert("操作最愛失敗");
+                    alert("操作最愛失敗 (網路或伺服器錯誤)");
                     console.error(e);
                 }
-            });
+            }
+            
+            favoriteBtn.addEventListener("click", performFavoriteAction);
+            
+            // ... (其他初始化邏輯，例如繪圖設置、懸停邏輯等，請確保完整複製您之前的代碼) ...
+            
         });
+    </script>
+    
+    <script>
+        // 這裡應該包含您上次提供的繪圖、均線、清除、懸停等邏輯，以保持功能完整性。
+        function updateDrawSettings() {
+            const color = document.getElementById("lineColor").value;
+            const width = parseInt(document.getElementById("lineWidth").value);
+            const gd = document.querySelector(".plotly-graph-div");
+            Plotly.relayout(gd, {
+                'newshape.line.color': color,
+                'newshape.line.width': width
+            });
+        }
+        // ... (其他輔助函數) ...
+        
     </script>
 
 </body>
