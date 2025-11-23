@@ -6,3 +6,4 @@ pandas
 yfinance
 tqdm
 plotly
+scipy
