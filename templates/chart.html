@@ -5,7 +5,7 @@
     <title>{{ stock_id }} K線圖</title>
     <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
     <style>
-        /* --- CSS 樣式部分 --- */
+        /* --- CSS 樣式部分 (保持不變) --- */
         body {
             font-family: Arial, sans-serif;
             margin: 0;
@@ -252,7 +252,12 @@
             <label for="noteInput" style="white-space: nowrap;">備註:</label>
             <input type="text" id="noteInput" placeholder="輸入備註，儲存後自動寫入" value="{{ favorite_note | default('') }}">
         </div>
-
+        
+        <div class="control-group">
+            <label for="nSrLevelsInput">S/R 組數:</label>
+            <input type="number" id="nSrLevelsInput" value="{{ current_n_sr_levels | default(3) }}" min="1" max="10" style="width: 50px;">
+            <button onclick="changeNSRLevels(document.getElementById('nSrLevelsInput').value)" style="background-color:#c0c0ff">更新S/R</button>
+        </div>
         <div class="control-group">
             <label for="frequencySelect">週期:</label>
             <select id="frequencySelect" onchange="changeFrequency(this.value)">
@@ -297,21 +302,23 @@
         let currentNumRows = parseInt("{{ num_rows }}");
         let simpleMode = "{{ '1' if simple_mode else '0' }}";
         let currentFrequency = "{{ frequency }}";
-        // 確保取到的字串已移除不必要的 HTML 轉義字元
+        // 🌟 修正：獲取 S/R 組數，使用後端修正後的變數名
+        let currentNSRLevels = parseInt("{{ current_n_sr_levels | default(3) }}"); 
+        
         let trendDescText = "{{ trend_desc | safe }}".trim();
         let reboundDescText = "{{ rebound_desc | safe }}".trim();
         let trendClass = "{{ trend_class }}";
         
         let penEnabled = true;
         
-        // 🌟 整合來源: 獲取後端傳來的備註
         const initialNote = "{{ favorite_note | default('') }}";
 
 
-        // ---------------------- 核心導航函數 (不變) ----------------------
-        function buildUrl(stockId, index, numRows, simpleMode, frequency) {
+        // ---------------------- 核心導航函數：已修正，使用 currentNSRLevels ----------------------
+        function buildUrl(stockId, index, numRows, simpleMode, frequency, nSrLevels) {
             const listParam = stockList.join(',');
-            let url = `/chart/${stockId}?num_rows=${numRows}&simple_mode=${simpleMode}&frequency=${frequency}`;
+            // 🌟 確保所有導航連結都帶上 n_sr_levels
+            let url = `/chart/${stockId}?num_rows=${numRows}&simple_mode=${simpleMode}&frequency=${frequency}&n_sr_levels=${nSrLevels}`;
             if (listParam) {
                 url += `&list=${listParam}&index=${index}`;
             }
@@ -324,21 +331,39 @@
                 currentIndex,
                 currentNumRows,
                 simpleMode,
-                newFreq
+                newFreq, 
+                currentNSRLevels 
             );
         }
 
-       function changeNumRows(n) {
- window.location.href = buildUrl(
- stockList[currentIndex],
- currentIndex,
-n, // **修正：使用傳入的新筆數 n**
- simpleMode,
- currentFrequency
- );
- }
+        function changeNumRows(n) {
+            window.location.href = buildUrl(
+                stockList[currentIndex],
+                currentIndex,
+                n, 
+                simpleMode,
+                currentFrequency,
+                currentNSRLevels
+            );
+        }
         
-        // ----------- 畫筆 & 均線 & 清除 (優化按鈕顏色更新) -----------
+        function changeNSRLevels(n) {
+            const newN = parseInt(n);
+            if (isNaN(newN) || newN < 1 || newN > 10) {
+                alert("S/R 組數必須在 1 到 10 之間");
+                return;
+            }
+            window.location.href = buildUrl(
+                stockList[currentIndex],
+                currentIndex,
+                currentNumRows,
+                simpleMode,
+                currentFrequency,
+                newN // 新的 S/R 組數
+            );
+        }
+        
+        // ... (其他工具函數：updateDrawSettings, toggleMA, clearDrawings, applySignalStyles 保持不變) ...
 
         function updateDrawSettings() {
             const color = document.getElementById("lineColor").value;
@@ -351,9 +376,6 @@ n, // **修正：使用傳入的新筆數 n**
             });
         }
 
-        /**
-         * 🌟 優化後的 toggleMA 函數：切換均線和止損線的顯示/隱藏狀態，並更新按鈕顏色。
-         */
         function toggleMA() {
             const gd = document.querySelector(".plotly-graph-div");
             const toggleMABtn = document.getElementById("toggleMA");
@@ -362,15 +384,12 @@ n, // **修正：使用傳入的新筆數 n**
             let maVisible = localStorage.getItem("maVisible");
             if (maVisible === null) maVisible = 'true';
             
-            // 切換狀態
             maVisible = maVisible === 'true' ? 'false' : 'true';
             localStorage.setItem("maVisible", maVisible);
 
-            // 決定新的 visible 屬性
             const visible = maVisible === 'true' ? true : 'legendonly';
 
             gd.data.forEach((trace, i) => {
-                // 檢查 MA、止損線、VWAP（如果存在）
                 if (trace.name && (trace.name.includes('MA') || trace.name.includes('止損') || trace.name.includes('VWAP'))) {
                     Plotly.restyle(gd, {
                         'visible': visible
@@ -378,7 +397,6 @@ n, // **修正：使用傳入的新筆數 n**
                 }
             });
             
-            // 🌟 更新按鈕顏色: 隱藏時顯示粉紅提示色
             toggleMABtn.style.background = maVisible === 'true' ? '#ddd' : '#ffc0cb';
         }
 
@@ -390,21 +408,19 @@ n, // **修正：使用傳入的新筆數 n**
             });
         }
 
-        // 趨勢信號閃爍邏輯 (來自您的有效版本)
         function applySignalStyles() {
             const reboundSpan = document.getElementById("reboundDesc");
             reboundSpan.classList.remove('flashing');
             reboundSpan.style.backgroundColor = 'transparent';
             reboundSpan.style.color = 'inherit';
 
-            // 判斷是否需要閃爍
             if (reboundDescText.includes('起漲信號') || reboundDescText.includes('潛在起漲提示') || reboundDescText.includes('買入')) {
                 reboundSpan.classList.add('flashing');
             }
         }
 
-
-        // ----------- 初始化與事件監聽 -----------
+        // ... (初始化與事件監聽：DOMContentLoaded) ...
+        
         document.addEventListener("DOMContentLoaded", function () {
             const gd = document.querySelector(".plotly-graph-div");
             const hoverBox = document.getElementById("hoverInfo");
@@ -413,49 +429,42 @@ n, // **修正：使用傳入的新筆數 n**
             const clearBtn = document.getElementById("clearDraw");
             const stockIndexDisplay = document.getElementById("stockIndexDisplay");
             const favoriteBtn = document.getElementById("favoriteBtn");
-            // 🌟 整合來源: 獲取備註和跑馬燈元素
             const noteInput = document.getElementById("noteInput");
             const noteMarqueeDiv = document.getElementById("noteMarquee");
             const marqueeContent = document.getElementById("marqueeContent");
 
             if (!gd) return; // 如果圖表元素不存在，則停止執行
 
-            // 導航按鈕監聽 (沿用您的邏輯)
+            // 導航按鈕監聽 (使用修正後的 buildUrl)
             document.getElementById("prevStock").addEventListener("click", () => {
                 if (currentIndex > 0) currentIndex--;
-                window.location.href = buildUrl(stockList[currentIndex], currentIndex, currentNumRows, simpleMode, currentFrequency);
+                window.location.href = buildUrl(stockList[currentIndex], currentIndex, currentNumRows, simpleMode, currentFrequency, currentNSRLevels);
             });
 
             document.getElementById("nextStock").addEventListener("click", () => {
                 if (currentIndex < stockList.length - 1) currentIndex++;
-                window.location.href = buildUrl(stockList[currentIndex], currentIndex, currentNumRows, simpleMode, currentFrequency);
+                window.location.href = buildUrl(stockList[currentIndex], currentIndex, currentNumRows, simpleMode, currentFrequency, currentNSRLevels);
             });
 
             // 功能按鈕監聽
             toggleMABtn.addEventListener("click", toggleMA);
             clearBtn.addEventListener("click", clearDrawings);
             
-            // 執行信號閃爍邏輯
             applySignalStyles();
             
-            // 顯示目前第幾筆
             function updateStockIndexDisplay() {
                 stockIndexDisplay.textContent = `${currentIndex+1}/${stockList.length}`;
             }
             if (stockList.length > 1) updateStockIndexDisplay();
             else stockIndexDisplay.style.display = 'none';
 
-            // ------------------------------------------------
-            // 🌟 均線初始化：確保圖表載入時，狀態與 localStorage 同步 (保留目標邏輯)
-            // ------------------------------------------------
+            // 均線初始化 (保持不變)
             let maVisible = localStorage.getItem("maVisible");
             if (maVisible === null) maVisible = 'true';
             
             const initialVisible = maVisible === 'true' ? true : 'legendonly';
             toggleMABtn.style.background = maVisible === 'true' ? '#ddd' : '#ffc0cb'; // 初始按鈕顏色
 
-            // 由於您的圖表是通過 Flask 渲染的 Plotly.js，
-            // 初始 Plotly.restyle 可以在 DOMContentLoaded 內進行，因為圖表數據已嵌入。
             gd.data.forEach((trace, i) => {
                 if (trace.name && (trace.name.includes('MA') || trace.name.includes('止損') || trace.name.includes('VWAP'))) {
                     Plotly.restyle(gd, {
@@ -464,29 +473,20 @@ n, // **修正：使用傳入的新筆數 n**
                 }
             });
 
-            // ------------------------------------------------
-            // 🌟 畫筆/拖曳模式邏輯 (保留目標邏輯)
-            // ------------------------------------------------
+            // 畫筆/拖曳模式邏輯 (保持不變)
             const isMobile = /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent);
             
             const drawModeToggle = () => {
-                
-                // 決定新的狀態
                 penEnabled = !penEnabled; 
-                
-                // 決定新的拖曳模式
                 let newDragMode = false;
                 if (isMobile) {
                     newDragMode = penEnabled ? 'drawline' : false;
                 } else {
-                    // 非 Mobile 模式下，關閉畫筆應切換到 'pan' (平移/縮放)
                     newDragMode = penEnabled ? 'drawline' : 'pan';
                 }
 
-                // 執行切換
                 Plotly.relayout(gd, { dragmode: newDragMode });
 
-                // 更新按鈕樣式和文字
                 if (penEnabled) {
                     toggleBtn.textContent = "📱 關閉畫筆";
                     toggleBtn.style.background = "#c0ffc0";
@@ -495,16 +495,13 @@ n, // **修正：使用傳入的新筆數 n**
                     toggleBtn.style.background = "#ddd";
                 }
             };
-
-            // 初始化畫筆狀態
+            
             if (isMobile) {
-                // Mobile: 預設關閉畫筆
                 penEnabled = false;
                 Plotly.relayout(gd, { dragmode: false });
                 toggleBtn.textContent = "📱 開啟畫筆";
                 toggleBtn.style.background = "#ddd";
                 
-                // Mobile: 使用 click 事件顯示 hover info
                 gd.on('plotly_click', function (data) {
                     if (!data.points || !data.points.length) return;
                     const pt = data.points[0];
@@ -514,15 +511,12 @@ n, // **修正：使用傳入的新筆數 n**
                     hoverBox.style.display = 'block';
                     setTimeout(() => hoverBox.style.display = 'none', 2500);
                 });
-
             } else {
-                // Desktop: 預設開啟畫筆
                 penEnabled = true;
                 Plotly.relayout(gd, { dragmode: 'drawline' }); 
                 toggleBtn.textContent = "📱 關閉畫筆";
                 toggleBtn.style.background = "#c0ffc0";
                 
-                // Desktop: 使用 hover 事件顯示 hover info
                 gd.on('plotly_hover', function (data) {
                     const pt = data.points[0];
                     hoverBox.innerHTML = `${pt.data.name || ''}<br>${pt.x}<br>${pt.y}`;
@@ -535,32 +529,27 @@ n, // **修正：使用傳入的新筆數 n**
                 });
             }
             
-            // 統一綁定畫筆按鈕的點擊事件
             toggleBtn.addEventListener("click", drawModeToggle);
 
-            
-            // ------------------ 🌟 整合來源: 跑馬燈初始化及更新函數 ------------------
+            // 跑馬燈初始化及更新函數 (保持不變)
             function updateMarquee(note) {
                 const trimmedNote = note.trim();
                 if (trimmedNote.length > 0) {
-                    // 🌟 注意：我們將整個內容放入 marqueeContent 中
                     marqueeContent.innerHTML = `<span>我的備註:</span> ${trimmedNote}`;
                     noteMarqueeDiv.style.display = 'block';
-                    // 重新應用動畫 (為了確保在內容更新後動畫重新播放)
                     marqueeContent.style.animation = 'none';
-                    void marqueeContent.offsetWidth; // 觸發重繪/重排
+                    void marqueeContent.offsetWidth;
                     marqueeContent.style.animation = 'marquee 20s linear infinite';
                 } else {
                     noteMarqueeDiv.style.display = 'none';
-                    marqueeContent.style.animation = 'none'; // 停止動畫
+                    marqueeContent.style.animation = 'none';
                 }
             }
             
-            // 載入時初始化跑馬燈
             updateMarquee(initialNote);
 
 
-            // ----------- 🌟 整合來源: 最愛按鈕邏輯 (加入備註功能) -----------
+            // ----------- 🌟 修正後的：最愛按鈕邏輯 (解決 415 錯誤) -----------
             let isFavorite = {{ 'true' if is_favorite else 'false' }};
             const stockId = "{{ stock_id }}";
             const stockName = "{{ stock_id }}"; 
@@ -569,7 +558,7 @@ n, // **修正：使用傳入的新筆數 n**
                 if (isFavorite) {
                     favoriteBtn.style.backgroundColor = 'green';
                     favoriteBtn.style.color = 'white';
-                    favoriteBtn.textContent = '⭐ 已加入最愛';
+                    favoriteBtn.textContent = '⭐ 已加入最愛 (點擊取消)';
                 } else {
                     favoriteBtn.style.backgroundColor = '#ffd700';
                     favoriteBtn.style.color = 'black';
@@ -581,49 +570,53 @@ n, // **修正：使用傳入的新筆數 n**
             async function performFavoriteAction() {
                 try {
                     const newNote = noteInput.value.trim();
-                    let bodyData = `stock_id=${encodeURIComponent(stockId)}&stock_name=${encodeURIComponent(stockName)}`;
+                    // 點擊按鈕，切換收藏狀態
+                    const newIsFavorite = !isFavorite; 
                     
-                    // 🌟 加入備註到 POST 請求中
-                    bodyData += `&note=${encodeURIComponent(newNote)}`;
+                    const bodyData = {
+                        stock_id: stockId, 
+                        stock_name: stockName,
+                        note: newNote,
+                        is_favorite: newIsFavorite // 傳遞新的收藏狀態
+                    };
 
                     const res = await fetch("/favorite", {
                         method: "POST",
                         headers: {
-                            "Content-Type": "application/x-www-form-urlencoded"
+                            // 🌟 修正點：必須是 application/json
+                            "Content-Type": "application/json"
                         },
-                        body: bodyData
+                        // 🌟 修正點：將 JS 對象轉換為 JSON 字符串
+                        body: JSON.stringify(bodyData) 
                     });
                     
                     const data = await res.json();
                     
-                    if (data.favorite !== undefined) {
-                        isFavorite = data.favorite;
+                    if (res.ok) {
+                        isFavorite = newIsFavorite; 
                         updateFavoriteButton();
                         alert(data.message);
                         
-                        // 🌟 根據操作結果更新前端
+                        // 根據操作結果更新備註顯示
                         if (isFavorite) {
-                                // 如果是新增/更新
-                                noteInput.value = newNote; // 更新輸入框
-                                updateMarquee(newNote);    // 更新跑馬燈
+                            noteInput.value = newNote;
+                            updateMarquee(newNote);
                         } else {
-                            // 如果是移除
                             noteInput.value = '';
-                            updateMarquee('');         // 清空跑馬燈
+                            updateMarquee(''); 
                         }
                     } else {
-                            alert(`操作失敗: ${data.message || '未知錯誤'}`);
+                        alert(`操作失敗: ${data.message || '未知伺服器錯誤'}`);
                     }
                 } catch (e) {
-                    alert("操作最愛失敗 (網路或伺服器錯誤)");
+                    alert("操作最愛失敗 (網路連線錯誤)");
                     console.error(e);
                 }
             }
             
-            // 將事件監聽器改為新的函數
-            favoriteBtn.removeEventListener("click", favoriteBtn.clickListener); // 移除舊的 (如果存在)
+            // 綁定事件監聽器
             favoriteBtn.addEventListener("click", performFavoriteAction);
-            // ------------------ 🌟 整合來源: 最愛按鈕邏輯 END ------------------
+            // ------------------ 修正後的：最愛按鈕邏輯 END ------------------
 
 
         });

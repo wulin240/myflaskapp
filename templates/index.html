@@ -4,10 +4,107 @@
     <meta charset="UTF-8">
     <title>台股K線查詢系統</title>
     <style>
-        body { font-family: Arial, sans-serif; text-align: center; padding-top: 30px; }
-        input, select { margin: 5px; padding: 8px; }
-        button { padding: 8px 16px; cursor: pointer; }
-        hr { margin: 20px 0; }
+        /* 基礎樣式 */
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            text-align: center; 
+            padding-top: 20px; 
+            background-color: #f4f7f9;
+            color: #333;
+        }
+        h1 {
+            color: #007bff;
+            margin-bottom: 30px;
+        }
+        h3 { 
+            color: #495057; 
+            margin-bottom: 20px;
+            border-bottom: 2px solid #eee;
+            padding-bottom: 10px;
+            width: 90%; /* 讓標題寬度縮小，置中 */
+            margin-left: auto;
+            margin-right: auto;
+        }
+        
+        /* 表單容器樣式 */
+        form { 
+            margin: 25px auto; 
+            padding: 20px; 
+            border: 1px solid #ddd; 
+            border-radius: 8px; 
+            display: flex; 
+            flex-direction: column;
+            align-items: center; /* 讓所有內容在表單內置中 */
+            max-width: 450px;
+            background-color: #ffffff;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        }
+        
+        /* 每個輸入行 (Flexbox) */
+        .form-group {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 90%;
+            margin-bottom: 10px;
+        }
+        
+        /* 標籤樣式 */
+        label { 
+            font-size: 14px;
+            text-align: right; 
+            padding-right: 10px;
+            flex-shrink: 0; /* 防止標籤縮小 */
+        }
+        
+        /* 輸入框和選擇框樣式 */
+        input[type="text"], 
+        input[type="date"], 
+        input[type="number"], 
+        select { 
+            padding: 8px; 
+            border: 1px solid #ccc; 
+            border-radius: 4px; 
+            flex-grow: 1; /* 讓輸入框佔滿剩餘空間 */
+            min-width: 150px;
+            box-sizing: border-box;
+        }
+        
+        /* 按鈕樣式 */
+        button { 
+            padding: 10px 20px; 
+            cursor: pointer; 
+            border: none; 
+            border-radius: 4px; 
+            background-color: #28a745; /* 綠色按鈕 */
+            color: white; 
+            font-weight: bold;
+            transition: background-color 0.2s; 
+            margin-top: 15px;
+            margin-bottom: 10px;
+        }
+        button:hover { 
+            background-color: #218838; 
+        }
+
+        /* 簡單模式和選項組 */
+        .options-group {
+            display: flex;
+            align-items: center;
+            margin-top: 10px;
+        }
+        .options-group label {
+            text-align: left;
+            padding-right: 0;
+            min-width: unset;
+        }
+        
+        hr { 
+            margin: 30px auto; 
+            border: 0; 
+            border-top: 1px solid #eee; 
+            width: 50%;
+        }
     </style>
 </head>
 <body>
@@ -15,60 +112,108 @@
 
     <form action="/query" method="post">
         <h3>🔍 查詢個股</h3>
-        <label>股票代號：</label>
-        <input type="text" name="stock_id" required><br>
-        <label>起始日期：</label>
-        <input type="date" name="start_date"><br>
-        <label>結束日期：</label>
-        <input type="date" name="end_date"><br>
-        <label>顯示筆數：</label>
-        <input type="number" name="num_rows" value="30" min="1" max="300"><br>
-        <button type="submit">查詢</button>
-        <label>
-            <input type="checkbox" name="simple_mode" value="1">
-            簡單模式
-        </label>
+        
+        <div class="form-group">
+            <label>股票代號：</label>
+            <input type="text" name="stock_id" required>
+        </div>
+        
+        <div class="form-group">
+            <label>S/R 組數 (1-10)：</label>
+            <input type="number" name="n_sr_levels" value="3" min="1" max="10">
+        </div>
+        
+        <div class="form-group">
+            <label>顯示筆數：</label>
+            <input type="number" name="num_rows" value="30" min="1" max="300">
+        </div>
+        
+        <div class="form-group">
+            <label>起始日期：</label>
+            <input type="date" name="start_date">
+        </div>
+        
+        <div class="form-group">
+            <label>結束日期：</label>
+            <input type="date" name="end_date">
+        </div>
+
+        <div class="options-group">
+            <label for="simple_mode_query">
+                <input type="checkbox" name="simple_mode" value="1" id="simple_mode_query">
+                簡單模式 (隱藏技術指標)
+            </label>
+        </div>
+        
+        <button type="submit">查詢 K 線圖</button>
     </form>
 
     <hr>
 
     <form action="/filter" method="post">
         <h3>🎯 股票條件篩選</h3>
-        <label>成交量大於：</label>
-        <input type="number" name="volume_min" placeholder="輸入成交量" value=100000><br>
+        
+        <div class="form-group">
+            <label>S/R 組數 (1-10)：</label>
+            <input type="number" name="n_sr_levels" value="3" min="1" max="10">
+        </div>
 
-        <label>趨勢：</label>
-        <select name="trend_type">
-            <option value="多頭">多頭</option>
-            <option value="空頭">空頭</option>
-            <option value="盤整">盤整</option>
-            <option value="">不限</option>
-        </select><br>
+        <div class="form-group">
+            <label>成交量大於：</label>
+            <input type="number" name="volume_min" placeholder="輸入成交量" value="100000">
+        </div>
 
-        <label>ADR14(平均波動%) 大於：</label>
-        <input type="number" name="change_min" placeholder="輸入門檻值" value=2><br>
+        <div class="form-group">
+            <label>趨勢：</label>
+            <select name="trend_type">
+                <option value="" selected>不限</option>
+                <option value="多頭">多頭</option>
+                <option value="空頭">空頭</option>
+                <option value="盤整">盤整</option>
+            </select>
+        </div>
 
-        <label>顯示筆數：</label>
-        <input type="number" name="num_rows" value="30" min="1" max="300"><br>
+        <div class="form-group">
+            <label>ADR14(平均波動%) 大於：</label>
+            <input type="number" name="change_min" placeholder="輸入門檻值" value="2">
+        </div>
 
+        <div class="form-group">
+            <label>顯示筆數：</label>
+            <input type="number" name="num_rows" value="30" min="1" max="300">
+        </div>
+
+        <div class="options-group">
+            <label for="simple_mode_filter">
+                <input type="checkbox" name="simple_mode" value="1" id="simple_mode_filter">
+                簡單模式 (隱藏技術指標)
+            </label>
+        </div>
+        
         <button type="submit">篩選股票</button>
-        <label>
-            <input type="checkbox" name="simple_mode" value="1">
-            簡單模式
-        </label>
     </form>
 
     <hr>
 
     <form action="/favorites" method="get"> 
         <h3>⭐ 我的最愛</h3>
-        <p>顯示最近 90 筆最愛股票資料</p>
+        <p style="color: #6c757d; font-size: 14px; margin-top: -10px;">顯示最近 90 筆最愛股票資料</p>
+        
+        <div class="form-group">
+            <label>S/R 組數 (1-10)：</label>
+            <input type="number" name="n_sr_levels" value="3" min="1" max="10">
+        </div>
+
         <input type="hidden" name="num_rows" value="90">
-        <label>
-            <input type="checkbox" name="simple_mode" value="1">
-            簡單模式
-        </label><br>
-        <button type="submit">查看最愛股票</button>
+        
+        <div class="options-group">
+            <label for="simple_mode_favorites">
+                <input type="checkbox" name="simple_mode" value="1" id="simple_mode_favorites">
+                簡單模式 (隱藏技術指標)
+            </label>
+        </div>
+        
+        <button type="submit" style="background-color: #ffc107; color: #333;">查看最愛股票</button>
     </form>
 
 </body>
