@@ -801,7 +801,7 @@ def generate_chart(stock_id_clean, start_date=None, end_date=None, simple_mode=F
         dict(
             label="隱藏 S/R", 
             method="relayout",
-            args=[hide_args]
+            args=[hide_args],
         ),
         dict(
             label="顯示 S/R",
@@ -835,8 +835,8 @@ def generate_chart(stock_id_clean, start_date=None, end_date=None, simple_mode=F
                 buttons=buttons,
                 pad={"r": 10, "t": 10},
                 showactive=True,
-                x=0.0, 
-                xanchor="left",
+                x=1.0, 
+                xanchor="right",
                 y=1.1, 
                 yanchor="top"
             )
