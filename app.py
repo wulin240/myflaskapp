@@ -308,34 +308,28 @@ import pandas as pd
 import numpy as np
 
 # ----------------- 🌟 NEW: 主力行為偵測核心函數 -----------------
-# ----------------- 🌟 I. 主力行為偵測核心函數 (最終優化版) -----------------
+# ----------------- 🌟 I. 主力行為偵測核心函數 (最終修復版 - 含 RSI 背離) -----------------
 import pandas as pd
 import numpy as np
 
-# 假設此函數與 generate_chart 在同一文件，可以訪問全局變量
-# 為了獨立性，我們只使用傳入的 df_input
 def detect_smart_money_signals(df_input, vsa_vol_multiplier=2, rsi_period=14):
     """
-    主力行為偵測 - 判斷潛在的主力拉抬和拋售訊號。
+    主力行為偵測 - 判斷潛在的主力拉抬和拋售訊號，並包含 RSI 背離偵測。
     前提：傳入的 df_input 必須已包含 MA20, MA60, BB_UP/LOW, ATR14 等所有基礎指標。
     """
     
     df = df_input.copy()
     
-    # 🌟 修正點：確保日期欄位存在 (用於回傳)
-    if 'date' not in df.columns and df.index.name != 'date':
-         df.reset_index(inplace=True) 
-
-    # --- 趨勢濾網使用傳入的指標 (MA20/MA60) ---
-    # 🌟 這裡不會因為 KeyError 失敗，因為 generate_chart 已經確保 MA 欄位存在
-    is_ma20_gt_ma60 = df['MA20'] > df['MA60']
-    is_low_gt_ma20 = df['low'] > df['MA20']
-
-    # --- 計算 VWAP 和 RSI ---
-    df['TP'] = (df['high'] + df['low'] + df['close']) / 3
-    df['VOL20'] = df['volume'].rolling(20).mean() # VOL20 仍需計算
+    # 🌟 修正點：確保索引連續且日期欄位存在
+    if 'date' not in df.columns:
+        df.reset_index(inplace=True) 
+    df.reset_index(drop=True, inplace=True) # 確保索引是 0, 1, 2, ...
     
-    # K 線實體上下限
+    # --- 基礎指標計算 (VWAP, RSI) ---
+    df['TP'] = (df['high'] + df['low'] + df['close']) / 3
+    df['VOL20'] = df['volume'].rolling(20).mean()
+    
+    # K 線實體上下限 (用於複合訊號)
     df['Body_Max'] = df[['open', 'close']].max(axis=1)
     df['Body_Min'] = df[['open', 'close']].min(axis=1)
     
@@ -343,10 +337,11 @@ def detect_smart_money_signals(df_input, vsa_vol_multiplier=2, rsi_period=14):
     df['TPV'] = df['TP'] * df['volume']
     df['VWAP'] = df['TPV'].cumsum() / df['volume'].cumsum()
     
-    # RSI
+    # RSI (保持與舊版相同計算方法)
     delta = df['close'].diff()
     gain = delta.where(delta > 0, 0)
     loss = -delta.where(delta < 0, 0)
+    # 使用 14 期 RSI
     avg_gain = gain.ewm(com=rsi_period - 1, adjust=False).mean()
     avg_loss = loss.ewm(com=rsi_period - 1, adjust=False).mean()
     rs = avg_gain / avg_loss.replace(0, 1e-9)
@@ -355,11 +350,8 @@ def detect_smart_money_signals(df_input, vsa_vol_multiplier=2, rsi_period=14):
     # K 線形態與量能
     df['Body_Ratio'] = (df['close'] - df['open']).abs() / (df['high'] - df['low']).replace(0, 1e-6)
     is_high_volume = df['volume'] >= (df['VOL20'] * vsa_vol_multiplier)
-    is_long_bull_k = (df['close'] > df['open']) & (df['Body_Ratio'] > 0.6) 
-    
-    # ----------------------------------------------------
-    # --- 多頭訊號 (Buy Signals) ---
-    # ----------------------------------------------------
+    is_long_bull_k = (df['close'] > df['open']) & (df['Body_Ratio'] > 0.6)
+    is_long_bear_k = (df['close'] < df['open']) & (df['Body_Ratio'] > 0.6)
     
     # --- 1. VSA 強勢拉抬 (吸籌) --- 
     df['Signal_VSA_Strong'] = np.where(is_long_bull_k & is_high_volume, df['low'] * 0.99, np.nan)
@@ -371,7 +363,10 @@ def detect_smart_money_signals(df_input, vsa_vol_multiplier=2, rsi_period=14):
         np.nan
     )
     
-    # --- 3. 複合型主力吸籌突破 (Accumulation Breakout) --- 
+    # --- 3. 複合型主力吸籌突破 (Accumulation Breakout) (保留新版邏輯) --- 
+    is_ma20_gt_ma60 = df['MA20'] > df['MA60']
+    is_low_gt_ma20 = df['low'] > df['MA20']
+    
     is_near_ma20 = (df['low'] < df['MA20'] * 1.10) & (df['low'] > df['MA20'] * 0.90)
     ma20_max = df['MA20'].rolling(20).max()
     ma20_min = df['MA20'].rolling(20).min()
@@ -380,10 +375,9 @@ def detect_smart_money_signals(df_input, vsa_vol_multiplier=2, rsi_period=14):
     highest_close_20d = df['close'].shift(1).rolling(20).max() 
     is_breaking_out = df['close'] > highest_close_20d
     
-    # 價格有效性判斷 (使用傳入的 BB_UP)
     is_body_contains_bb_up = (df['Body_Max'] >= df['BB_UP']) & (df['Body_Min'] < df['BB_UP'])
     is_not_overbought = df['close'] <= df['BB_UP']
-    is_price_valid = is_near_ma20 | (is_not_overbought & is_body_contains_bb_up) 
+    is_price_valid = is_near_ma20 | (is_not_overbought & is_body_contains_bb_up)
     
     condition_1_original = (is_near_ma20 & is_ma20_flat & is_breaking_out & is_high_volume & is_long_bull_k)
     condition_2_vsa_priority = (df['Signal_VSA_Strong'].notna() & is_price_valid & is_ma20_gt_ma60 & is_low_gt_ma20 & is_breaking_out & is_high_volume & is_long_bull_k)
@@ -391,32 +385,80 @@ def detect_smart_money_signals(df_input, vsa_vol_multiplier=2, rsi_period=14):
     is_accumulation_breakout = condition_1_original | condition_2_vsa_priority
     
     df['Signal_Accumulation_Breakout'] = np.where(is_accumulation_breakout, df['low'] * 0.985, np.nan)
-
-    # ----------------------------------------------------
-    # --- 空頭訊號及背離訊號 (邏輯保持不變) ---
-    # ----------------------------------------------------
-    is_long_bear_k = (df['close'] < df['open']) & (df['Body_Ratio'] > 0.6) 
+    
+    # --- 4. VSA 恐慌拋售 (派發/出貨) ---
     df['Signal_VSA_Weak'] = np.where(is_long_bear_k & is_high_volume, df['high'] * 1.01, np.nan)
+
+    # --- 5. 主力成本跌破訊號：收盤跌破 VWAP ---
     df['Signal_VWAP_BreakDown'] = np.where(
         (df['close'] < df['VWAP']) & (df['close'].shift(1).fillna(np.inf) >= df['VWAP'].shift(1).fillna(np.inf)),
         df['high'] * 1.005, 
         np.nan
     )
     
-    # 背離訊號 (省略計算細節，假設它使用 MA20 等指標且已經定義)
+    # ----------------------------------------------------
+    # --- 6. 🌟 整合 RSI 背離訊號 (使用舊版邏輯) ---
+    # ----------------------------------------------------
     divergence_signal = [np.nan] * len(df)
     top_divergence_signal = [np.nan] * len(df)
     
-    df['Signal_Divergence'] = divergence_signal
-    df['Signal_TopDivergence'] = top_divergence_signal
+    # 找出底分型和頂分型 (3根K線判斷，與舊版相同)
+    # 這裡使用 df.index 確保基於 0 開始的連續索引進行 loc 訪問
+    df['Temp_Bottom_Pivot'] = (df['low'].shift(-1) > df['low']) & (df['low'].shift(1) > df['low'])
+    df['Temp_Top_Pivot'] = (df['high'].shift(-1) < df['high']) & (df['high'].shift(1) < df['high'])
     
-    # 訊號優先級清理
+    # 確保只考慮當前範圍內的轉折點
+    bottom_pivots = df[df['Temp_Bottom_Pivot']].copy()
+    top_pivots = df[df['Temp_Top_Pivot']].copy()
+
+    # --- 底部背離 (Signal_Divergence) ---
+    if len(bottom_pivots) >= 2:
+        for i in range(1, len(bottom_pivots)):
+            B2_idx = bottom_pivots.index[i]
+            B1_idx = bottom_pivots.index[i-1]
+            
+            # 價格底底低 (Price Lower Low): B2 low < B1 low
+            is_price_ll = df.loc[B2_idx, 'low'] < df.loc[B1_idx, 'low']
+            # RSI 底底高 (RSI Higher Low): B2 RSI > B1 RSI
+            is_rsi_hh = df.loc[B2_idx, 'RSI'] > df.loc[B1_idx, 'RSI']
+
+            if is_price_ll and is_rsi_hh:
+                divergence_signal[B2_idx] = df.loc[B2_idx, 'low'] * 0.998 # 標記在 K 線底部附近
+
+    # --- 頂部背離 (Signal_TopDivergence) ---
+    if len(top_pivots) >= 2:
+        for i in range(1, len(top_pivots)):
+            T2_idx = top_pivots.index[i]
+            T1_idx = top_pivots.index[i-1]
+            
+            # 價格頂頂高 (Price Higher High): T2 high > T1 high
+            is_price_hh = df.loc[T2_idx, 'high'] > df.loc[T1_idx, 'high']
+            # RSI 頂頂低 (RSI Lower High): T2 RSI < T1 RSI
+            is_rsi_ll = df.loc[T2_idx, 'RSI'] < df.loc[T1_idx, 'RSI']
+
+            if is_price_hh and is_rsi_ll:
+                top_divergence_signal[T2_idx] = df.loc[T2_idx, 'high'] * 1.002 # 標記在 K 線頂部附近
+    
+    # 將列表轉換為 Series 並賦值
+    df['Signal_Divergence'] = pd.Series(divergence_signal, index=df.index)
+    df['Signal_TopDivergence'] = pd.Series(top_divergence_signal, index=df.index)
+    
+    # ----------------------------------------------------
+    # --- 訊號優先級清理 (保留新版複合訊號的處理) ---
+    # ----------------------------------------------------
+    
+    # 將複合訊號也納入強勢買入
     is_any_strong_buy = df['Signal_VSA_Strong'].notna() | df['Signal_VWAP_Break'].notna() | df['Signal_Accumulation_Breakout'].notna()
     is_any_strong_sell = df['Signal_VSA_Weak'].notna() | df['Signal_VWAP_BreakDown'].notna()
+
+    # 1. 買入訊號優先：強勢買入日清除所有看跌/賣出訊號 (包含頂背離)
     df.loc[is_any_strong_buy, ['Signal_VSA_Weak', 'Signal_VWAP_BreakDown', 'Signal_TopDivergence']] = np.nan
+    
+    # 2. 賣出訊號優先：強勢賣出日清除所有看漲/買入訊號 (包含底背離和複合訊號)
     df.loc[is_any_strong_sell, ['Signal_VSA_Strong', 'Signal_VWAP_Break', 'Signal_Accumulation_Breakout', 'Signal_Divergence']] = np.nan
     
     # 最終回傳所有訊號欄位 + 必要的指標欄位 (ATR14/BB_UP/BB_LOW)
+    # 確保 BB_UP/BB_LOW/ATR14 被返回，以便在 generate_chart 中計算偏移
     return df[['date', 
                 'Signal_VSA_Strong', 'Signal_VWAP_Break', 'Signal_Divergence', 'Signal_Accumulation_Breakout',
                 'Signal_VSA_Weak', 'Signal_VWAP_BreakDown', 'Signal_TopDivergence', 'BB_UP', 'BB_LOW', 'ATR14']]
