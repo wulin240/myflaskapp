@@ -302,7 +302,7 @@
         let currentNumRows = parseInt("{{ num_rows }}");
         let simpleMode = "{{ '1' if simple_mode else '0' }}";
         let currentFrequency = "{{ frequency }}";
-        // 🌟 修正：獲取 S/R 組數，使用後端修正後的變數名
+        // 🌟 修正：獲取 S/R 組數
         let currentNSRLevels = parseInt("{{ current_n_sr_levels | default(3) }}"); 
         
         let trendDescText = "{{ trend_desc | safe }}".trim();
@@ -312,12 +312,15 @@
         let penEnabled = true;
         
         const initialNote = "{{ favorite_note | default('') }}";
+        
+        // 🌟 新增：獲取即時模式狀態
+        const isRealtimeMode = {{ 'true' if is_realtime_mode else 'false' }};
 
 
         // ---------------------- 核心導航函數：已修正，使用 currentNSRLevels ----------------------
         function buildUrl(stockId, index, numRows, simpleMode, frequency, nSrLevels) {
             const listParam = stockList.join(',');
-            // 🌟 確保所有導航連結都帶上 n_sr_levels
+            // 確保所有導航連結都帶上 n_sr_levels
             let url = `/chart/${stockId}?num_rows=${numRows}&simple_mode=${simpleMode}&frequency=${frequency}&n_sr_levels=${nSrLevels}`;
             if (listParam) {
                 url += `&list=${listParam}&index=${index}`;
@@ -363,8 +366,6 @@
             );
         }
         
-        // ... (其他工具函數：updateDrawSettings, toggleMA, clearDrawings, applySignalStyles 保持不變) ...
-
         function updateDrawSettings() {
             const color = document.getElementById("lineColor").value;
             const width = parseInt(document.getElementById("lineWidth").value);
@@ -419,8 +420,6 @@
             }
         }
 
-        // ... (初始化與事件監聽：DOMContentLoaded) ...
-        
         document.addEventListener("DOMContentLoaded", function () {
             const gd = document.querySelector(".plotly-graph-div");
             const hoverBox = document.getElementById("hoverInfo");
@@ -583,10 +582,10 @@
                     const res = await fetch("/favorite", {
                         method: "POST",
                         headers: {
-                            // 🌟 修正點：必須是 application/json
+                            // 修正點：必須是 application/json
                             "Content-Type": "application/json"
                         },
-                        // 🌟 修正點：將 JS 對象轉換為 JSON 字符串
+                        // 修正點：將 JS 對象轉換為 JSON 字符串
                         body: JSON.stringify(bodyData) 
                     });
                     
@@ -617,6 +616,19 @@
             // 綁定事件監聽器
             favoriteBtn.addEventListener("click", performFavoriteAction);
             // ------------------ 修正後的：最愛按鈕邏輯 END ------------------
+            
+            
+            // ------------------ 🌟 新增：即時模式自動刷新邏輯 ------------------
+            if (isRealtimeMode) {
+                // 30 秒 (30000 毫秒) 自動刷新頁面
+                setTimeout(function() {
+                    console.log("Real-time mode enabled. Reloading page for latest data...");
+                    // 重新導向到當前頁面，確保所有參數被保留
+                    const currentUrl = buildUrl(stockId, currentIndex, currentNumRows, simpleMode, currentFrequency, currentNSRLevels);
+                    window.location.href = currentUrl;
+                }, 30000); 
+            }
+            // ------------------ 🌟 即時模式自動刷新邏輯 END ------------------
 
 
         });

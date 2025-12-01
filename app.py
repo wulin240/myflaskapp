@@ -8,6 +8,12 @@ import urllib.parse
 from datetime import datetime, timedelta
 import os
 import json # 確保可以處理 JSON 響應
+import yfinance as yf # 【新增】用於即時抓取
+import pytz # 【新增】用於時區處理
+import time # 【新增】用於定時器
+
+# 【新增】定義台灣時區
+TAIWAN_TZ = pytz.timezone('Asia/Taipei')
 
 app = Flask(__name__)
 
@@ -17,31 +23,85 @@ SUPABASE_URL = "https://djhdpltrhlhqfxmwniki.supabase.co"
 SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRqaGRwbHRyaGxocWZ4bXduaWtpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMwNjQwODgsImV4cCI6MjA3ODY0MDA4OH0.jwSPe-HMHxv2xGCjS42O5Cjby0KtgsHEStlQWs0cyPk"
 TABLE_NAME = "stock_data"
 FAVORITE_TABLE = "favorites"
-QUICK_VIEW_TABLE = "quick_view"  # 確保這行在這裡定義
+QUICK_VIEW_TABLE = "quick_view"# 確保這行在這裡定義
 
 headers = {
-    "apikey": SUPABASE_KEY.strip(),
-    "Authorization": f"Bearer {SUPABASE_KEY.strip()}",
-    "Content-Type": "application/json" # 新增 Content-Type 確保 POST/DELETE 正確
+"apikey": SUPABASE_KEY.strip(),
+"Authorization": f"Bearer {SUPABASE_KEY.strip()}",
+"Content-Type": "application/json" # 新增 Content-Type 確保 POST/DELETE 正確
 }
 
 # ----------------- 輔助函數：最愛股票檢查 -----------------
 def is_favorite(stock_id):
-    """檢查股票是否已加入最愛"""
+ """檢查股票是否已加入最愛"""
+ try:
+ # 使用 count 查詢來優化性能
+    params = {"stock_id": f"eq.{stock_id}", "select": "count"}
+    res = requests.get(f"{SUPABASE_URL}/rest/v1/{FAVORITE_TABLE}", headers=headers, params=params, timeout=10)
+    res.raise_for_status()
+ # Supabase count 回應會在 Headers 中的 Content-Range
+    return int(res.headers.get("Content-Range").split('/')[-1]) > 0
+ except Exception as e:
+    print(f"⚠️ 檢查最愛失敗: {e}")
+    return False
+
+# ----------------- 【新增】即時資料與交易時間判斷函數 -----------------
+
+def is_trading_hours():
+    """
+    【新增】判斷目前時間是否在台股交易時段 (通常 09:00 - 13:30, 週末休息)
+    """
+    now = datetime.now(TAIWAN_TZ)
+    hour, minute = now.hour, now.minute
+    
+    # 判斷是否為工作日 (Mon=0, Sun=6)
+    if 0 <= now.weekday() <= 4: 
+        # 09:00 ~ 13:30
+        if (hour == 9 and minute >= 0) or \
+           (10 <= hour <= 12) or \
+           (hour == 13 and minute <= 30):
+            return True
+    return False
+
+def fetch_realtime_data(stock_id):
+    """
+    【新增】從 yfinance 獲取最新的即時股價
+    """
+    # yfinance 對於台股代碼是 xxxx.TW 或 xxxx.TWO
+    yf_stock_id = stock_id if '.' in stock_id else f"{stock_id}.TW" 
+    
     try:
-        # 使用 count 查詢來優化性能
-        params = {"stock_id": f"eq.{stock_id}", "select": "count"}
-        res = requests.get(f"{SUPABASE_URL}/rest/v1/{FAVORITE_TABLE}", headers=headers, params=params, timeout=10)
-        res.raise_for_status()
-        # Supabase count 回應會在 Headers 中的 Content-Range
-        return int(res.headers.get("Content-Range").split('/')[-1]) > 0
-    except Exception as e:
-        print(f"⚠️ 檢查最愛失敗: {e}")
-        return False
+        ticker = yf.Ticker(yf_stock_id)
+        # 獲取當前資訊
+        info = ticker.info
         
-# ----------------- 抓取股票資料 -----------------
-def fetch_stock_data(stock_id):
-    """從 Supabase 獲取股票 OHLCV 數據"""
+        current_price = info.get('regularMarketPrice')
+        
+        if current_price:
+            now = datetime.now(TAIWAN_TZ).strftime('%Y-%m-%d %H:%M:%S')
+            
+            realtime_data = {
+                'price': float(current_price),
+                'time': now,
+                'open': info.get('regularMarketOpen'),
+                'high': info.get('dayHigh'),
+                'low': info.get('dayLow'),
+                'close': float(current_price), # 以即時價視為收盤價
+                'volume': info.get('volume'), # 今日成交量
+                'stock_name': info.get('longName', '即時股價'),
+                'stock_id': stock_id
+            }
+            return realtime_data
+        
+        return None
+    except Exception as e:
+        print(f"⚠️ yfinance 讀取 {yf_stock_id} 即時股價失敗: {e}")
+        return None
+
+# ----------------- 抓取股票資料 (原 Supabase 函數) -----------------
+# 注意：這個函數保持不變，它只負責獲取歷史數據。
+def fetch_stock_data_history(stock_id): # 【修改函數名】以區分歷史和即時
+    """從 Supabase 獲取股票 OHLCV 歷史數據"""
     stock_id_clean = stock_id.replace(".TW","").replace(".TWO","")
     params = {"stock_id": f"eq.{stock_id_clean}", "order": "date.asc", "select": "*, stock_name"}
 
@@ -53,11 +113,68 @@ def fetch_stock_data(stock_id):
         data = res.json()
         if not data: return pd.DataFrame()
         df = pd.DataFrame(data)
-        df['date'] = pd.to_datetime(df['date'])
+        df['date'] = pd.to_datetime(df['date']).dt.tz_localize(None) # 移除時區信息以便後續比較
         return df
     except Exception as e:
-        print(f"⚠️ Supabase 讀取 {stock_id} 失敗: {e}")
+        print(f"⚠️ Supabase 讀取 {stock_id} 歷史數據失敗: {e}")
         return pd.DataFrame()
+
+# ----------------- 【新增】主要數據調度函數 -----------------
+def fetch_stock_data(stock_id):
+    """
+    主要數據抓取函數：先嘗試 Supabase，若無今日收盤資料且在交易時間，則切換到 yfinance
+    返回: DataFrame (包含所有歷史資料)
+    返回: RealtimeData (字典格式的即時價格) 或 None
+    """
+    df_history = fetch_stock_data_history(stock_id)
+    today = datetime.now(TAIWAN_TZ).date()
+    
+    # 判斷 Supabase 中是否有今日資料
+    has_today_data = False
+    if not df_history.empty:
+        # 取最後一筆資料的日期 (確保是日期而非時間戳)
+        latest_date = df_history['date'].iloc[-1].date()
+        if latest_date == today:
+            has_today_data = True # 已有今日收盤資料
+
+    # 如果沒有今日收盤資料 且 正在交易時段，則返回即時資料 (不寫入)
+    if not has_today_data and is_trading_hours():
+        print(f"📢 {stock_id} 今日無收盤資料且在交易時段，嘗試抓取即時資料...")
+        realtime_data = fetch_realtime_data(stock_id)
+        
+        if realtime_data:
+            # 將即時資料格式化為 DataFrame 結構，並追加到歷史數據的末尾 (用於畫圖)
+            # 確保欄位名稱與歷史數據一致
+            realtime_df = pd.DataFrame([{
+                'date': pd.to_datetime(realtime_data['time']).date(), 
+                'open': realtime_data['open'],
+                'high': realtime_data['high'],
+                'low': realtime_data['low'],
+                'close': realtime_data['close'],
+                'volume': realtime_data['volume'],
+                'stock_name': realtime_data['stock_name'],
+                'stock_id': stock_id.replace(".TW","").replace(".TWO","")
+            }])
+            # 確保 'date' 欄位的 dtype 與 df_history 兼容 (datetime64[ns])
+            realtime_df['date'] = pd.to_datetime(realtime_df['date'])
+            
+            # 合併歷史數據和即時數據 (即時數據取代歷史數據中可能的當天殘留/不完整數據)
+            if not df_history.empty and latest_date == today:
+                 # 刪除不完整的當日數據
+                df_history = df_history[df_history['date'].dt.date != today]
+            
+            df_combined = pd.concat([df_history, realtime_df], ignore_index=True)
+            
+            # 返回畫圖用的合併數據和即時價格字典
+            return df_combined, realtime_data 
+        
+        print(f"⚠️ yfinance 即時資料抓取失敗，僅返回歷史數據。")
+        # 即時資料抓取失敗，回傳歷史資料和 None
+        return df_history, None
+
+    # 有今日收盤資料 或 非交易時段，僅返回歷史資料和 None
+    return df_history, None
+
 
 # ----------------- 數據處理核心功能 -----------------
 
@@ -484,9 +601,27 @@ from scipy.signal import argrelextrema
 # from your_modules import fetch_stock_data, convert_to_weekly, kline_merge, find_stroke_pivots, filter_pivots_for_stroke, detect_smart_money_signals, analyze_trend_by_pivots, check_rebound_signal
 
 
+# ----------------- 整合生成圖表 (含趨勢分析和訊號檢查) -----------------
+import pandas as pd
+import numpy as np
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+from scipy.signal import argrelextrema
+
+# 假設所有輔助函數已在此處或其他文件中導入:
+# fetch_stock_data, convert_to_weekly, kline_merge, find_stroke_pivots, filter_pivots_for_stroke, detect_smart_money_signals, analyze_trend_by_pivots, check_rebound_signal
+
+# 引入 TAIWAN_TZ (已在第一段代碼中定義)
+from datetime import datetime
+import pytz
+TAIWAN_TZ = pytz.timezone('Asia/Taipei') 
+# 引入 fetch_stock_data, is_trading_hours (已在第一段代碼中定義)
+# from .your_module import fetch_stock_data, is_trading_hours 
+
+
 def generate_chart(stock_id_clean, start_date=None, end_date=None, simple_mode=False, num_rows=30, frequency='D', n_sr_levels=3):
     """生成包含 K 線圖、纏論筆段、技術指標和主力訊號的 Plotly 圖表。
-       - 修正：S/R 矩形寬度使用 ATR 基礎動態調整。
+        - 修正：S/R 矩形寬度使用 ATR 基礎動態調整。
     """
     
     # 🌟 設定 S/R 組數
@@ -497,8 +632,14 @@ def generate_chart(stock_id_clean, start_date=None, end_date=None, simple_mode=F
     # 設置矩形寬度為 ATR14 的百分比。0.8 代表 S/R 區間寬度 = 0.8 * ATR14。
     ATR_MULTIPLIER = 0.2 
     
-    # 獲取資料
-    df_original = fetch_stock_data(stock_id_clean)
+    # ----------------------------------------------------
+    # 🌟 【修改點 1: 數據接收】接收 df 和即時數據
+    # ----------------------------------------------------
+    df_original, realtime_data = fetch_stock_data(stock_id_clean)
+    
+    is_realtime_mode = realtime_data is not None
+    realtime_price_text = ""
+    
     if df_original.empty: return None, f"{stock_id_clean} 無資料", "N/A", "N/A", "neutral"
 
     df_full = df_original.copy()
@@ -538,6 +679,7 @@ def generate_chart(stock_id_clean, start_date=None, end_date=None, simple_mode=F
     df_merged = kline_merge(df_tech.copy())
     df_pivot_data = find_stroke_pivots(df_merged.copy())
     
+    # 注意：這裡應該使用 df_tech 作為原始數據進行合併，確保所有指標都在
     df_pivot_info, last_pivot_date, last_pivot_type = filter_pivots_for_stroke(df_pivot_data, df_tech.copy())
 
     df_final = df_tech.copy() 
@@ -550,6 +692,7 @@ def generate_chart(stock_id_clean, start_date=None, end_date=None, simple_mode=F
     df_final['Pivot_Price'] = df_final['Pivot_Price'].fillna(np.nan)
     
     # --- 3. 主力信號偵測 ---
+    # df_final 已經包含所有指標和即時 K 線 (如果存在)，可以直接傳入
     df_smart_signals = detect_smart_money_signals(df_final.copy(), vsa_vol_multiplier=2)
     
     final_signal_cols = [
@@ -560,7 +703,13 @@ def generate_chart(stock_id_clean, start_date=None, end_date=None, simple_mode=F
     df_final = df_final.merge(df_smart_signals[final_signal_cols], on='date', how='left')
     
     # --- 4. 趨勢分析與信號檢查 ---
+    # 確保只顯示最後 N 筆資料
     df_display = df_final.tail(num_rows).copy()
+    
+    # 確保即時價格的數據被正確計算 VWAP
+    df_display['TPV_display'] = df_display['TP'] * df_display['volume']
+    df_display['VWAP'] = df_display['TPV_display'].cumsum() / df_display['volume'].cumsum()
+    
     pivot_df_full = df_final[df_final['Pivot_Type'] != 0].copy()
     
     trend_analysis = analyze_trend_by_pivots(pivot_df_full)
@@ -574,8 +723,27 @@ def generate_chart(stock_id_clean, start_date=None, end_date=None, simple_mode=F
     elif '上升趨勢' in trend_desc_final or '上穿前高' in trend_desc_final:
         trend_class = 'bullish'
         
-    df_display['TPV_display'] = df_display['TP'] * df_display['volume']
-    df_display['VWAP'] = df_display['TPV_display'].cumsum() / df_display['volume'].cumsum()
+    # ----------------------------------------------------
+    # 🌟 即時模式價格標籤設置
+    # ----------------------------------------------------
+    if is_realtime_mode:
+        price = realtime_data['price']
+        change = price - df_display['close'].iloc[-2] if len(df_display) >= 2 else 0
+        percent_change = (change / df_display['close'].iloc[-2] * 100) if len(df_display) >= 2 and df_display['close'].iloc[-2] != 0 else 0
+        time_str = datetime.strptime(realtime_data['time'], '%Y-%m-%d %H:%M:%S').strftime('%H:%M:%S')
+        # 根據漲跌計算 CSS 類別
+        if change > 0:
+         price_color_class = 'up'
+        elif change < 0:
+         price_color_class = 'down'
+        else:
+            price_color_class = 'flat'
+        realtime_price_text = (
+            f"💰 即時價: {price:.2f} | "
+            f"變化: {change:+.2f} ({percent_change:+.2f}%) | "
+            f"時間: {time_str}"
+        )
+        # 覆蓋 df_display 的最後一筆價格 (如果需要)，但由於 df_full 中已經包含了，這一步主要是為了標籤
     
     # ----------------------------------------------------
     # 🌟 計算基於 ATR 的價格半寬度
@@ -662,7 +830,7 @@ def generate_chart(stock_id_clean, start_date=None, end_date=None, simple_mode=F
     fig.add_trace(go.Scatter(x=df_display['date'], y=df_display['BB_LOW'], mode='lines', line=dict(color='darkgreen', width=1, dash='dot'), name='布林下軌'), row=1, col=1)
 
     # ----------------------------------------------------
-    # 🌟 修正後的 S/R 繪製：使用 ATR 基礎的 price_half_width
+    # 🌟 修正後的 S/R 繪製
     # ----------------------------------------------------
     sr_shapes = [] 
     sr_annotations = [] 
@@ -730,7 +898,7 @@ def generate_chart(stock_id_clean, start_date=None, end_date=None, simple_mode=F
     fig.add_trace(go.Scatter(x=df_display['date'], y=df_display['VOL20'] / 1000, mode='lines', line=dict(color='orange', width=1), name='VOL20 (K)'), row=2, col=1)
     fig.add_trace(go.Scatter(x=df_display['date'], y=df_display['ATR14'], mode='lines', line=dict(color='red', width=1), name='ATR14'), row=3, col=1)
     
-    # 10. 筆段繪製 
+    # 10. 筆段繪製 (邏輯保持不變)
     df_pivots_display_filtered = df_final[
         (df_final['Pivot_Type'] != 0) &
         (df_final['date'] >= df_display['date'].min()) &
@@ -816,9 +984,16 @@ def generate_chart(stock_id_clean, start_date=None, end_date=None, simple_mode=F
     first_date_str = df_display['date'].iloc[0].strftime("%Y-%m-%d")
     last_date_str = df_display['date'].iloc[-1].strftime("%Y-%m-%d")
 
+    # 組合圖表標題
+    chart_title_text = (
+        f"{stock_id_clean} ({stock_name}) - {frequency}線趨勢: {trend_desc_final} ({first_date_str} ~ {last_date_str})"
+    )
+    if is_realtime_mode:
+        chart_title_text += " [🟢 即時模式]"
+
     fig.update_layout(
         title=dict(
-            text=f"{stock_id_clean} ({stock_name}) - {frequency}線趨勢: {trend_desc_final} ({first_date_str} ~ {last_date_str})",
+            text=chart_title_text,
             x=0.5, xanchor='center'
         ),
         xaxis_rangeslider_visible=False, hovermode='x unified', dragmode='drawline',
@@ -842,6 +1017,49 @@ def generate_chart(stock_id_clean, start_date=None, end_date=None, simple_mode=F
             )
         ]
     )
+    
+    # ----------------------------------------------------
+    # 🌟 【修改點 2: 增加即時價格 Annotation】
+    # ----------------------------------------------------
+    if is_realtime_mode:
+        if(price_color_class=='up'):
+            fig.add_annotation(
+                text=realtime_price_text,
+             xref="paper", yref="paper",
+                x=0.0, y=1.08, # 放置在圖表左上角，靠近標題
+             showarrow=False,
+             font=dict(size=14, color="#800000", weight='bold'),
+                bgcolor="rgba(255, 255, 255, 0.9)",
+             bordercolor="#800000", borderwidth=1, borderpad=4,
+                align="left"
+            )
+        elif(price_color_class=='down'):
+            
+            fig.add_annotation(
+                text=realtime_price_text,
+             xref="paper", yref="paper",
+                x=0.0, y=1.08, # 放置在圖表左上角，靠近標題
+             showarrow=False,
+             font=dict(size=14, color="#126412", weight='bold'),
+                bgcolor="rgba(255, 255, 255, 0.9)",
+             bordercolor="#126412", borderwidth=1, borderpad=4,
+                align="left"
+            )
+        else:
+            
+            fig.add_annotation(
+                text=realtime_price_text,
+             xref="paper", yref="paper",
+                x=0.0, y=1.08, # 放置在圖表左上角，靠近標題
+             showarrow=False,
+             font=dict(size=14, color="#CA6C00", weight='bold'),
+                bgcolor="rgba(255, 255, 255, 0.9)",
+             bordercolor="#CA6C00", borderwidth=1, borderpad=4,
+                align="left"
+            )   
+        
+    
+    # ----------------------------------------------------
 
     fig.update_yaxes(title_text="成交量 (K)", row=2, col=1)
     
@@ -927,7 +1145,6 @@ def favorites_clear_all():
 
 
 # ----------------- Flask 路由部分 (已修正 n_sr_levels 傳遞) -----------------
-
 @app.route('/')
 def index():
     # 假設 index.html 存在
@@ -941,9 +1158,18 @@ def query():
     frequency = request.form.get('frequency', 'D')
     n_sr_levels = request.form.get('n_sr_levels', type=int, default=3)
     
+    # 🌟 修正點 1: 即時模式判斷
+    # 只有在日線圖 (D) 且處於交易時間才啟用即時模式
+    is_realtime_mode = (frequency == 'D') and is_trading_hours()
+    
+    # 如果是即時模式，我們使用當前時間作為結束日期，以確保獲取最新 K 線 (儘管 fetch_stock_data 內部已處理)
+    # 這裡的 end_date 傳遞主要是為了邏輯清晰，generate_chart 最終使用 df_full 的最後一行
+    end_date_param = datetime.now(TAIWAN_TZ).strftime("%Y-%m-%d") if is_realtime_mode else None
+
     chart_html, error, trend_desc, rebound_desc, trend_class = generate_chart(
         stock_id, simple_mode=simple_mode, num_rows=num_rows, 
-        frequency=frequency, n_sr_levels=n_sr_levels
+        frequency=frequency, n_sr_levels=n_sr_levels,
+        end_date=end_date_param # 傳遞 end_date 參數，雖然在 generate_chart 內部可能未使用，但在這裡保留
     )
     
     if error: return f"<h2>{error}</h2><a href='/'>返回</a>"
@@ -955,7 +1181,9 @@ def query():
         chart_html=chart_html, stock_id=stock_id, stock_list=stock_id, current_index=0, 
         simple_mode=simple_mode, num_rows=num_rows, is_favorite=is_favorite,
         favorite_note=favorite_note, trend_desc=trend_desc, rebound_desc=rebound_desc, 
-        trend_class=trend_class, frequency=frequency, current_n_sr_levels=n_sr_levels # 使用修正後的變數名
+        trend_class=trend_class, frequency=frequency, current_n_sr_levels=n_sr_levels,
+        # 🌟 修正點 2: 傳遞 is_realtime_mode
+        is_realtime_mode=is_realtime_mode
     )
 
 @app.route('/chart/<stock_id>/')
@@ -976,9 +1204,14 @@ def chart_from_list(stock_id):
         stock_ids = [stock_id]; current_index = 0
     current_stock = stock_ids[current_index] 
     
+    # 🌟 修正點 3: 即時模式判斷
+    is_realtime_mode = (frequency == 'D') and is_trading_hours()
+    end_date_param = datetime.now(TAIWAN_TZ).strftime("%Y-%m-%d") if is_realtime_mode else None
+
     chart_html, error, trend_desc, rebound_desc, trend_class = generate_chart(
         current_stock, simple_mode=simple_mode, num_rows=num_rows, 
-        frequency=frequency, n_sr_levels=n_sr_levels
+        frequency=frequency, n_sr_levels=n_sr_levels,
+        end_date=end_date_param
     )
     
     if error: return f"<h2>{error}</h2><a href='/'>返回</a>"
@@ -991,7 +1224,9 @@ def chart_from_list(stock_id):
         current_index=current_index, simple_mode=simple_mode, num_rows=num_rows, 
         is_favorite=is_favorite, favorite_note=favorite_note, trend_desc=trend_desc,
         rebound_desc=rebound_desc, trend_class=trend_class, frequency=frequency,
-        current_n_sr_levels=n_sr_levels # 使用修正後的變數名
+        current_n_sr_levels=n_sr_levels,
+        # 🌟 修正點 4: 傳遞 is_realtime_mode
+        is_realtime_mode=is_realtime_mode 
     )
 
 # ----------------- Favorites 路由 (已修正 n_sr_levels 傳遞) -----------------
