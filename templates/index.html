@@ -21,7 +21,7 @@
             margin-bottom: 20px;
             border-bottom: 2px solid #eee;
             padding-bottom: 10px;
-            width: 90%; /* 讓標題寬度縮小，置中 */
+            width: 90%; 
             margin-left: auto;
             margin-right: auto;
         }
@@ -34,7 +34,7 @@
             border-radius: 8px; 
             display: flex; 
             flex-direction: column;
-            align-items: center; /* 讓所有內容在表單內置中 */
+            align-items: center; 
             max-width: 450px;
             background-color: #ffffff;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
@@ -54,7 +54,7 @@
             font-size: 14px;
             text-align: right; 
             padding-right: 10px;
-            flex-shrink: 0; /* 防止標籤縮小 */
+            flex-shrink: 0; 
         }
         
         /* 輸入框和選擇框樣式 */
@@ -65,7 +65,7 @@
             padding: 8px; 
             border: 1px solid #ccc; 
             border-radius: 4px; 
-            flex-grow: 1; /* 讓輸入框佔滿剩餘空間 */
+            flex-grow: 1; 
             min-width: 150px;
             box-sizing: border-box;
         }
@@ -76,7 +76,7 @@
             cursor: pointer; 
             border: none; 
             border-radius: 4px; 
-            background-color: #28a745; /* 綠色按鈕 */
+            background-color: #28a745; 
             color: white; 
             font-weight: bold;
             transition: background-color 0.2s; 
@@ -87,16 +87,28 @@
             background-color: #218838; 
         }
 
-        /* 簡單模式和選項組 */
+        /* 選項組 */
         .options-group {
             display: flex;
-            align-items: center;
+            flex-direction: column; /* 改為垂直排列以便放更多選項 */
+            align-items: flex-start;
+            width: 90%;
             margin-top: 10px;
+            background: #f9f9f9;
+            padding: 10px;
+            border-radius: 5px;
         }
         .options-group label {
             text-align: left;
             padding-right: 0;
             min-width: unset;
+            margin-bottom: 5px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+        }
+        .options-group input {
+            margin-right: 8px;
         }
         
         hr { 
@@ -105,6 +117,12 @@
             border-top: 1px solid #eee; 
             width: 50%;
         }
+
+        /* 強勢指標專用樣式 */
+        .highlight-label {
+            color: #d9534f;
+            font-weight: bold;
+        }
     </style>
 </head>
 <body>
@@ -112,39 +130,32 @@
 
     <form action="/query" method="post">
         <h3>🔍 查詢個股</h3>
-        
         <div class="form-group">
             <label>股票代號：</label>
             <input type="text" name="stock_id" required>
         </div>
-        
         <div class="form-group">
             <label>S/R 組數 (1-10)：</label>
             <input type="number" name="n_sr_levels" value="3" min="1" max="10">
         </div>
-        
         <div class="form-group">
             <label>顯示筆數：</label>
             <input type="number" name="num_rows" value="30" min="1" max="300">
         </div>
-        
         <div class="form-group">
             <label>起始日期：</label>
             <input type="date" name="start_date">
         </div>
-        
         <div class="form-group">
             <label>結束日期：</label>
             <input type="date" name="end_date">
         </div>
-
         <div class="options-group">
             <label for="simple_mode_query">
                 <input type="checkbox" name="simple_mode" value="1" id="simple_mode_query">
                 簡單模式 (隱藏技術指標)
             </label>
         </div>
-        
         <button type="submit">查詢 K 線圖</button>
     </form>
 
@@ -184,6 +195,15 @@
         </div>
 
         <div class="options-group">
+            <label class="highlight-label">
+                <input type="checkbox" name="over_high" value="1"> 
+                🚀 突破前高 (近10日收盤 > 前20日最高)
+            </label>
+            <label class="highlight-label">
+                <input type="checkbox" name="high_point" value="1"> 
+                🔥 強勢漲幅 (近10日內曾單日漲幅 > 7%)
+            </label>
+            <hr style="width: 100%; margin: 10px 0; border-top: 1px dashed #ccc;">
             <label for="simple_mode_filter">
                 <input type="checkbox" name="simple_mode" value="1" id="simple_mode_filter">
                 簡單模式 (隱藏技術指標)
@@ -198,21 +218,17 @@
     <form action="/favorites" method="get"> 
         <h3>⭐ 我的最愛</h3>
         <p style="color: #6c757d; font-size: 14px; margin-top: -10px;">顯示最近 90 筆最愛股票資料</p>
-        
         <div class="form-group">
             <label>S/R 組數 (1-10)：</label>
             <input type="number" name="n_sr_levels" value="3" min="1" max="10">
         </div>
-
         <input type="hidden" name="num_rows" value="90">
-        
         <div class="options-group">
             <label for="simple_mode_favorites">
                 <input type="checkbox" name="simple_mode" value="1" id="simple_mode_favorites">
                 簡單模式 (隱藏技術指標)
             </label>
         </div>
-        
         <button type="submit" style="background-color: #ffc107; color: #333;">查看最愛股票</button>
     </form>
 

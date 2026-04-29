@@ -1235,15 +1235,17 @@ def filter_stocks():
     # ------------------ 獲取所有篩選及配置參數 ------------------
     volume_min = request.form.get('volume_min', type=float, default=0)
     trend_type = request.form.get('trend_type', '')
-    # 注意：將 'change_min' (前端名稱) 映射到 'adr14_min' (後端變數名)
     adr14_min = request.form.get('change_min', type=float, default=0) 
     
+    # 🌟 新增：獲取強勢指標篩選 (勾選為 '1'，未勾選為 None)
+    over_high_selected = request.form.get('over_high') == '1'
+    high_point_selected = request.form.get('high_point') == '1'
+
     # 頁面配置參數
     simple_mode = request.form.get('simple_mode') == '1'
     num_rows = request.form.get('num_rows', type=int, default=60)
     recent_days = request.form.get('recent_days', type=int, default=30)
     frequency = request.form.get('frequency', 'D')
-    # 🌟 修正點 1: 確保讀取 n_sr_levels 參數
     n_sr_levels = request.form.get('n_sr_levels', type=int, default=3) 
 
     # ------------------ Supabase 數據獲取邏輯 ------------------
@@ -1254,16 +1256,22 @@ def filter_stocks():
 
     while True:
         try:
-            # 🌟 假設 SUPABASE_URL 和 headers 是全域可用的
+            # 構建基礎參數
             params = {
                 "latest_volume": f"gte.{int(volume_min)}",
                 "adr14": f"gte.{adr14_min}",
                 "latest_date": f"gte.{recent_date}",
-                # 僅在 trend_type 存在時加入篩選條件
                 "trend": f"eq.{trend_type}" if trend_type else None, 
                 "order": "latest_date.desc", "limit": limit, "offset": offset, "select": "*"
             }
-            # 移除 None 值的參數，防止 Supabase 報錯
+
+            # 🌟 新增：根據勾選狀態加入 over_high / high_point 篩選
+            if over_high_selected:
+                params["over_high"] = "eq.true"
+            if high_point_selected:
+                params["high_point"] = "eq.true"
+
+            # 移除 None 值的參數
             params = {k: v for k, v in params.items() if v is not None}
             
             res = requests.get(f"{SUPABASE_URL}/rest/v1/quick_view", headers=headers,
@@ -1277,7 +1285,6 @@ def filter_stocks():
             offset += limit
             
         except requests.exceptions.HTTPError as e:
-            # 捕獲並顯示 Supabase 返回的具體錯誤信息
             return f"<h2>Supabase HTTP 錯誤: {e.response.json().get('message', e)}</h2><a href='/'>返回</a>"
         except Exception as e: 
             return f"<h2>Supabase 讀取 QUICK_VIEW 失敗: {e}</h2><a href='/'>返回</a>"
@@ -1290,17 +1297,18 @@ def filter_stocks():
     count = len(df)
     list_param = urllib.parse.quote(','.join(stock_ids))
     
+    # 🌟 修改：表格標題加入新指標
     html = (f"<h2>篩選結果（共 {count} 筆）</h2>" 
             "<table border='1' cellpadding='6' style='margin-left:0; text-align:left;'>" 
             "<thead><tr>" 
             "<th>股票代號</th><th>股票名稱</th><th>成交量</th>" 
-            "<th>ADR14(%)</th><th>14天平均成交量</th><th>趨勢</th>" 
+            "<th>ADR14(%)</th><th>趨勢</th>" 
+            "<th>🚀突破前高</th><th>🔥強勢漲幅</th>" # 新增欄位標題
             "</tr></thead><tbody>")
             
     for idx, row in df.iterrows():
         simple_param = "1" if simple_mode else "0"
         
-        # 🌟 修正點 2: 在跳轉連結中加入 n_sr_levels 參數
         chart_url = (f"/chart/{row['stock_id']}?"
                      f"simple_mode={simple_param}&"
                      f"num_rows={num_rows}&"
@@ -1308,14 +1316,19 @@ def filter_stocks():
                      f"index={idx}&"
                      f"frequency={frequency}&"
                      f"n_sr_levels={n_sr_levels}")
-                     
+        
+        # 🌟 修改：將 boolean 轉為視覺符號，方便 Boss 閱讀
+        oh_icon = "✅" if row.get('over_high') else "---"
+        hp_icon = "✅" if row.get('high_point') else "---"
+
         html += (f"<tr>" 
                  f"<td><a href='{chart_url}'>{row['stock_id']}</a></td>" 
                  f"<td>{row['stock_name']}</td>" 
                  f"<td>{int(row['latest_volume'])}</td>" 
                  f"<td>{row['adr14']:.2f}</td>" 
-                 f"<td>{int(row['avg_volume_14'])}</td>" 
                  f"<td>{row['trend']}</td>" 
+                 f"<td style='text-align:center;'>{oh_icon}</td>" # 顯示突破狀態
+                 f"<td style='text-align:center;'>{hp_icon}</td>" # 顯示強勢狀態
                  f"</tr>")
                  
     html += "</tbody></table><br><a href='/'>返回</a>"
