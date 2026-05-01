@@ -90,7 +90,7 @@
         /* 選項組 */
         .options-group {
             display: flex;
-            flex-direction: column; /* 改為垂直排列以便放更多選項 */
+            flex-direction: column; 
             align-items: flex-start;
             width: 90%;
             margin-top: 10px;
@@ -122,6 +122,18 @@
         .highlight-label {
             color: #d9534f;
             font-weight: bold;
+        }
+
+        /* 價格輸入框專用微調 */
+        .price-input-container {
+            display: flex;
+            align-items: center;
+            flex-grow: 1;
+        }
+        .price-input-container span {
+            margin-left: 5px;
+            font-size: 14px;
+            color: #666;
         }
     </style>
 </head>
@@ -169,6 +181,15 @@
             <input type="number" name="n_sr_levels" value="3" min="1" max="10">
         </div>
 
+        <!-- 新增：股價上限篩選 -->
+        <div class="form-group">
+            <label>股價小於：</label>
+            <div class="price-input-container">
+                <input type="number" name="price_max" placeholder="不限" step="0.1">
+                <span>元</span>
+            </div>
+        </div>
+
         <div class="form-group">
             <label>成交量大於：</label>
             <input type="number" name="volume_min" placeholder="輸入成交量" value="100000">
@@ -197,11 +218,11 @@
         <div class="options-group">
             <label class="highlight-label">
                 <input type="checkbox" name="over_high" value="1"> 
-                🚀 突破前高 (近10日收盤 > 前20日最高)
+                🚀 突破前高 (近10日收盤 > 前40日最高)
             </label>
             <label class="highlight-label">
                 <input type="checkbox" name="high_point" value="1"> 
-                🔥 強勢漲幅 (近10日內曾單日漲幅 > 7%)
+                🔥 強勢漲幅 (近5日內曾單日漲幅 > 7%)
             </label>
             <hr style="width: 100%; margin: 10px 0; border-top: 1px dashed #ccc;">
             <label for="simple_mode_filter">

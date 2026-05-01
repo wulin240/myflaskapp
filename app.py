@@ -990,6 +990,7 @@ def generate_chart(stock_id_clean, start_date=None, end_date=None, simple_mode=F
     )
     if is_realtime_mode:
         chart_title_text += " [🟢 即時模式]"
+        
 
     fig.update_layout(
         title=dict(
@@ -1234,10 +1235,11 @@ def chart_from_list(stock_id):
 def filter_stocks():
     # ------------------ 獲取所有篩選及配置參數 ------------------
     volume_min = request.form.get('volume_min', type=float, default=0)
+    price_max = request.form.get('price_max', type=float) # 🌟 新增：獲取股價上限
     trend_type = request.form.get('trend_type', '')
     adr14_min = request.form.get('change_min', type=float, default=0) 
     
-    # 🌟 新增：獲取強勢指標篩選 (勾選為 '1'，未勾選為 None)
+    # 獲取強勢指標篩選
     over_high_selected = request.form.get('over_high') == '1'
     high_point_selected = request.form.get('high_point') == '1'
 
@@ -1262,10 +1264,17 @@ def filter_stocks():
                 "adr14": f"gte.{adr14_min}",
                 "latest_date": f"gte.{recent_date}",
                 "trend": f"eq.{trend_type}" if trend_type else None, 
-                "order": "latest_date.desc", "limit": limit, "offset": offset, "select": "*"
+                "order": "latest_date.desc", 
+                "limit": limit, 
+                "offset": offset, 
+                "select": "*"
             }
 
-            # 🌟 新增：根據勾選狀態加入 over_high / high_point 篩選
+            # 🌟 新增：股價上限篩選邏輯 (小於等於 price_max)
+            if price_max is not None:
+                params["last_close"] = f"lte.{price_max}"
+
+            # 根據勾選狀態加入 over_high / high_point 篩選
             if over_high_selected:
                 params["over_high"] = "eq.true"
             if high_point_selected:
@@ -1297,13 +1306,14 @@ def filter_stocks():
     count = len(df)
     list_param = urllib.parse.quote(','.join(stock_ids))
     
-    # 🌟 修改：表格標題加入新指標
+    # 🌟 修改：表格標題加入「目前股價」與指標
     html = (f"<h2>篩選結果（共 {count} 筆）</h2>" 
-            "<table border='1' cellpadding='6' style='margin-left:0; text-align:left;'>" 
-            "<thead><tr>" 
-            "<th>股票代號</th><th>股票名稱</th><th>成交量</th>" 
+            "<table border='1' cellpadding='6' style='margin-left:0; text-align:left; border-collapse: collapse; min-width: 600px;'>" 
+            "<thead style='background-color: #f2f2f2;'>" 
+            "<tr>" 
+            "<th>股票代號</th><th>股票名稱</th><th>目前股價</th><th>成交量</th>" 
             "<th>ADR14(%)</th><th>趨勢</th>" 
-            "<th>🚀突破前高</th><th>🔥強勢漲幅</th>" # 新增欄位標題
+            "<th>🚀突破</th><th>🔥強勢</th>" 
             "</tr></thead><tbody>")
             
     for idx, row in df.iterrows():
@@ -1317,18 +1327,21 @@ def filter_stocks():
                      f"frequency={frequency}&"
                      f"n_sr_levels={n_sr_levels}")
         
-        # 🌟 修改：將 boolean 轉為視覺符號，方便 Boss 閱讀
+        # 將 boolean 轉為視覺符號
         oh_icon = "✅" if row.get('over_high') else "---"
         hp_icon = "✅" if row.get('high_point') else "---"
+        # 股價顏色標註 (可選，讓 Boss 方便看)
+        price_val = row.get('last_close', 0)
 
         html += (f"<tr>" 
                  f"<td><a href='{chart_url}'>{row['stock_id']}</a></td>" 
                  f"<td>{row['stock_name']}</td>" 
+                 f"<td style='font-weight:bold;'>{price_val:.2f}</td>" # 顯示目前股價
                  f"<td>{int(row['latest_volume'])}</td>" 
                  f"<td>{row['adr14']:.2f}</td>" 
                  f"<td>{row['trend']}</td>" 
-                 f"<td style='text-align:center;'>{oh_icon}</td>" # 顯示突破狀態
-                 f"<td style='text-align:center;'>{hp_icon}</td>" # 顯示強勢狀態
+                 f"<td style='text-align:center;'>{oh_icon}</td>" 
+                 f"<td style='text-align:center;'>{hp_icon}</td>" 
                  f"</tr>")
                  
     html += "</tbody></table><br><a href='/'>返回</a>"
