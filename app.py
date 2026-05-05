@@ -1235,13 +1235,14 @@ def chart_from_list(stock_id):
 def filter_stocks():
     # ------------------ 獲取所有篩選及配置參數 ------------------
     volume_min = request.form.get('volume_min', type=float, default=0)
-    price_max = request.form.get('price_max', type=float) # 🌟 新增：獲取股價上限
+    price_max = request.form.get('price_max', type=float) # 🌟 獲取股價上限
     trend_type = request.form.get('trend_type', '')
     adr14_min = request.form.get('change_min', type=float, default=0) 
     
     # 獲取強勢指標篩選
     over_high_selected = request.form.get('over_high') == '1'
     high_point_selected = request.form.get('high_point') == '1'
+    abnormal_vol_selected = request.form.get('abnormal_volume') == '1' # 💥 新增：爆量篩選
 
     # 頁面配置參數
     simple_mode = request.form.get('simple_mode') == '1'
@@ -1270,15 +1271,17 @@ def filter_stocks():
                 "select": "*"
             }
 
-            # 🌟 新增：股價上限篩選邏輯 (小於等於 price_max)
+            # 股價上限篩選邏輯
             if price_max is not None:
                 params["last_close"] = f"lte.{price_max}"
 
-            # 根據勾選狀態加入 over_high / high_point 篩選
+            # 根據勾選狀態加入指標篩選
             if over_high_selected:
                 params["over_high"] = "eq.true"
             if high_point_selected:
                 params["high_point"] = "eq.true"
+            if abnormal_vol_selected: # 💥 加入爆量篩選
+                params["abnormal_volume"] = "eq.true"
 
             # 移除 None 值的參數
             params = {k: v for k, v in params.items() if v is not None}
@@ -1306,14 +1309,14 @@ def filter_stocks():
     count = len(df)
     list_param = urllib.parse.quote(','.join(stock_ids))
     
-    # 🌟 修改：表格標題加入「目前股價」與指標
+    # 🌟 修改表格標題：加入爆量欄位
     html = (f"<h2>篩選結果（共 {count} 筆）</h2>" 
-            "<table border='1' cellpadding='6' style='margin-left:0; text-align:left; border-collapse: collapse; min-width: 600px;'>" 
+            "<table border='1' cellpadding='6' style='margin-left:0; text-align:left; border-collapse: collapse; min-width: 700px;'>" 
             "<thead style='background-color: #f2f2f2;'>" 
             "<tr>" 
             "<th>股票代號</th><th>股票名稱</th><th>目前股價</th><th>成交量</th>" 
             "<th>ADR14(%)</th><th>趨勢</th>" 
-            "<th>🚀突破</th><th>🔥強勢</th>" 
+            "<th>🚀突破</th><th>🔥強勢</th><th>💥爆量</th>" 
             "</tr></thead><tbody>")
             
     for idx, row in df.iterrows():
@@ -1330,23 +1333,24 @@ def filter_stocks():
         # 將 boolean 轉為視覺符號
         oh_icon = "✅" if row.get('over_high') else "---"
         hp_icon = "✅" if row.get('high_point') else "---"
-        # 股價顏色標註 (可選，讓 Boss 方便看)
+        av_icon = "✅" if row.get('abnormal_volume') else "---" # 💥 爆量圖示
+        
         price_val = row.get('last_close', 0)
 
         html += (f"<tr>" 
                  f"<td><a href='{chart_url}'>{row['stock_id']}</a></td>" 
                  f"<td>{row['stock_name']}</td>" 
-                 f"<td style='font-weight:bold;'>{price_val:.2f}</td>" # 顯示目前股價
+                 f"<td style='font-weight:bold;'>{price_val:.2f}</td>" 
                  f"<td>{int(row['latest_volume'])}</td>" 
                  f"<td>{row['adr14']:.2f}</td>" 
                  f"<td>{row['trend']}</td>" 
                  f"<td style='text-align:center;'>{oh_icon}</td>" 
                  f"<td style='text-align:center;'>{hp_icon}</td>" 
+                 f"<td style='text-align:center;'>{av_icon}</td>" 
                  f"</tr>")
                  
     html += "</tbody></table><br><a href='/'>返回</a>"
     return html
-
 @app.route('/favorites', methods=['GET'])
 def favorites_page():
     simple_mode = request.args.get('simple_mode') == '1'

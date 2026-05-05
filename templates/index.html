@@ -181,7 +181,6 @@
             <input type="number" name="n_sr_levels" value="3" min="1" max="10">
         </div>
 
-        <!-- 新增：股價上限篩選 -->
         <div class="form-group">
             <label>股價小於：</label>
             <div class="price-input-container">
@@ -223,6 +222,11 @@
             <label class="highlight-label">
                 <input type="checkbox" name="high_point" value="1"> 
                 🔥 強勢漲幅 (近5日內曾單日漲幅 > 7%)
+            </label>
+            <!-- 爆量篩選新增 -->
+            <label class="highlight-label" style="color: #f0ad4e;">
+                <input type="checkbox" name="abnormal_volume" value="1"> 
+                💥 異常爆量 (近120日量能多次異常)
             </label>
             <hr style="width: 100%; margin: 10px 0; border-top: 1px dashed #ccc;">
             <label for="simple_mode_filter">
