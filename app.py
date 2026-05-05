@@ -1230,26 +1230,27 @@ def chart_from_list(stock_id):
         is_realtime_mode=is_realtime_mode 
     )
 
-# ----------------- Favorites 路由 (已修正 n_sr_levels 傳遞) -----------------
+# ----------------- 篩選路由 (已加入步步高升邏輯) -----------------
 @app.route('/filter', methods=['POST'])
 def filter_stocks():
     # ------------------ 獲取所有篩選及配置參數 ------------------
     volume_min = request.form.get('volume_min', type=float, default=0)
-    price_max = request.form.get('price_max', type=float) # 🌟 獲取股價上限
+    price_max = request.form.get('price_max', type=float) 
     trend_type = request.form.get('trend_type', '')
-    adr14_min = request.form.get('change_min', type=float, default=0) 
+    adr14_min = request.form.get('change_min', type=float, default=0)
     
     # 獲取強勢指標篩選
     over_high_selected = request.form.get('over_high') == '1'
     high_point_selected = request.form.get('high_point') == '1'
-    abnormal_vol_selected = request.form.get('abnormal_volume') == '1' # 💥 新增：爆量篩選
+    abnormal_vol_selected = request.form.get('abnormal_volume') == '1'
+    step_high_selected = request.form.get('step_high') == '1' # 🪜 新增：步步高升篩選
 
     # 頁面配置參數
     simple_mode = request.form.get('simple_mode') == '1'
     num_rows = request.form.get('num_rows', type=int, default=60)
     recent_days = request.form.get('recent_days', type=int, default=30)
     frequency = request.form.get('frequency', 'D')
-    n_sr_levels = request.form.get('n_sr_levels', type=int, default=3) 
+    n_sr_levels = request.form.get('n_sr_levels', type=int, default=3)
 
     # ------------------ Supabase 數據獲取邏輯 ------------------
     recent_date = (datetime.today() - timedelta(days=recent_days)).strftime("%Y-%m-%d")
@@ -1264,14 +1265,14 @@ def filter_stocks():
                 "latest_volume": f"gte.{int(volume_min)}",
                 "adr14": f"gte.{adr14_min}",
                 "latest_date": f"gte.{recent_date}",
-                "trend": f"eq.{trend_type}" if trend_type else None, 
-                "order": "latest_date.desc", 
-                "limit": limit, 
-                "offset": offset, 
+                "trend": f"eq.{trend_type}" if trend_type else None,
+                "order": "latest_date.desc",
+                "limit": limit,
+                "offset": offset,
                 "select": "*"
             }
 
-            # 股價上限篩選邏輯
+            # 股價上限篩選
             if price_max is not None:
                 params["last_close"] = f"lte.{price_max}"
 
@@ -1280,8 +1281,10 @@ def filter_stocks():
                 params["over_high"] = "eq.true"
             if high_point_selected:
                 params["high_point"] = "eq.true"
-            if abnormal_vol_selected: # 💥 加入爆量篩選
+            if abnormal_vol_selected:
                 params["abnormal_volume"] = "eq.true"
+            if step_high_selected: # 🪜 加入步步高升篩選條件
+                params["step_high"] = "eq.true"
 
             # 移除 None 值的參數
             params = {k: v for k, v in params.items() if v is not None}
@@ -1298,7 +1301,7 @@ def filter_stocks():
             
         except requests.exceptions.HTTPError as e:
             return f"<h2>Supabase HTTP 錯誤: {e.response.json().get('message', e)}</h2><a href='/'>返回</a>"
-        except Exception as e: 
+        except Exception as e:
             return f"<h2>Supabase 讀取 QUICK_VIEW 失敗: {e}</h2><a href='/'>返回</a>"
 
     # ------------------ 結果處理與 HTML 生成 ------------------
@@ -1309,14 +1312,14 @@ def filter_stocks():
     count = len(df)
     list_param = urllib.parse.quote(','.join(stock_ids))
     
-    # 🌟 修改表格標題：加入爆量欄位
-    html = (f"<h2>篩選結果（共 {count} 筆）</h2>" 
-            "<table border='1' cellpadding='6' style='margin-left:0; text-align:left; border-collapse: collapse; min-width: 700px;'>" 
-            "<thead style='background-color: #f2f2f2;'>" 
-            "<tr>" 
-            "<th>股票代號</th><th>股票名稱</th><th>目前股價</th><th>成交量</th>" 
-            "<th>ADR14(%)</th><th>趨勢</th>" 
-            "<th>🚀突破</th><th>🔥強勢</th><th>💥爆量</th>" 
+    # 🌟 修改表格標題：加入步步高升欄位
+    html = (f"<h2>篩選結果（共 {count} 筆）</h2>"
+            "<table border='1' cellpadding='6' style='margin-left:0; text-align:left; border-collapse: collapse; min-width: 800px;'>"
+            "<thead style='background-color: #f2f2f2;'>"
+            "<tr>"
+            "<th>股票代號</th><th>股票名稱</th><th>目前股價</th><th>成交量</th>"
+            "<th>ADR14(%)</th><th>趨勢</th>"
+            "<th>🚀突破</th><th>🔥強勢</th><th>💥爆量</th><th>🪜步步</th>"
             "</tr></thead><tbody>")
             
     for idx, row in df.iterrows():
@@ -1333,20 +1336,22 @@ def filter_stocks():
         # 將 boolean 轉為視覺符號
         oh_icon = "✅" if row.get('over_high') else "---"
         hp_icon = "✅" if row.get('high_point') else "---"
-        av_icon = "✅" if row.get('abnormal_volume') else "---" # 💥 爆量圖示
+        av_icon = "✅" if row.get('abnormal_volume') else "---"
+        sh_icon = "✅" if row.get('step_high') else "---" # 🪜 步步高升圖示
         
         price_val = row.get('last_close', 0)
 
-        html += (f"<tr>" 
-                 f"<td><a href='{chart_url}'>{row['stock_id']}</a></td>" 
-                 f"<td>{row['stock_name']}</td>" 
-                 f"<td style='font-weight:bold;'>{price_val:.2f}</td>" 
-                 f"<td>{int(row['latest_volume'])}</td>" 
-                 f"<td>{row['adr14']:.2f}</td>" 
-                 f"<td>{row['trend']}</td>" 
-                 f"<td style='text-align:center;'>{oh_icon}</td>" 
-                 f"<td style='text-align:center;'>{hp_icon}</td>" 
-                 f"<td style='text-align:center;'>{av_icon}</td>" 
+        html += (f"<tr>"
+                 f"<td><a href='{chart_url}'>{row['stock_id']}</a></td>"
+                 f"<td>{row['stock_name']}</td>"
+                 f"<td style='font-weight:bold;'>{price_val:.2f}</td>"
+                 f"<td>{int(row['latest_volume'])}</td>"
+                 f"<td>{row['adr14']:.2f}</td>"
+                 f"<td>{row['trend']}</td>"
+                 f"<td style='text-align:center;'>{oh_icon}</td>"
+                 f"<td style='text-align:center;'>{hp_icon}</td>"
+                 f"<td style='text-align:center;'>{av_icon}</td>"
+                 f"<td style='text-align:center;'>{sh_icon}</td>"
                  f"</tr>")
                  
     html += "</tbody></table><br><a href='/'>返回</a>"

@@ -223,11 +223,16 @@
                 <input type="checkbox" name="high_point" value="1"> 
                 🔥 強勢漲幅 (近5日內曾單日漲幅 > 7%)
             </label>
-            <!-- 爆量篩選新增 -->
             <label class="highlight-label" style="color: #f0ad4e;">
                 <input type="checkbox" name="abnormal_volume" value="1"> 
-                💥 異常爆量 (近120日量能多次異常)
+                💥 異常爆量 (5日均量5倍且近期多次)
             </label>
+            <!-- 步步高升篩選新增 -->
+            <label class="highlight-label" style="color: #007bff;">
+                <input type="checkbox" name="step_high" value="1"> 
+                🪜 步步高升 (近30日內連5日收紅且連漲)
+            </label>
+            
             <hr style="width: 100%; margin: 10px 0; border-top: 1px dashed #ccc;">
             <label for="simple_mode_filter">
                 <input type="checkbox" name="simple_mode" value="1" id="simple_mode_filter">
