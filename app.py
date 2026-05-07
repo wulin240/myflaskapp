@@ -1230,7 +1230,7 @@ def chart_from_list(stock_id):
         is_realtime_mode=is_realtime_mode 
     )
 
-# ----------------- 篩選路由 (已加入步步高升邏輯) -----------------
+# ----------------- 篩選路由 (已加入步步高升 & Ready Go 邏輯) -----------------
 @app.route('/filter', methods=['POST'])
 def filter_stocks():
     # ------------------ 獲取所有篩選及配置參數 ------------------
@@ -1243,7 +1243,8 @@ def filter_stocks():
     over_high_selected = request.form.get('over_high') == '1'
     high_point_selected = request.form.get('high_point') == '1'
     abnormal_vol_selected = request.form.get('abnormal_volume') == '1'
-    step_high_selected = request.form.get('step_high') == '1' # 🪜 新增：步步高升篩選
+    step_high_selected = request.form.get('step_high') == '1'
+    ready_go_selected = request.form.get('ready_go') == '1' # 🏁 新增：Ready Go 篩選
 
     # 頁面配置參數
     simple_mode = request.form.get('simple_mode') == '1'
@@ -1283,8 +1284,10 @@ def filter_stocks():
                 params["high_point"] = "eq.true"
             if abnormal_vol_selected:
                 params["abnormal_volume"] = "eq.true"
-            if step_high_selected: # 🪜 加入步步高升篩選條件
+            if step_high_selected:
                 params["step_high"] = "eq.true"
+            if ready_go_selected: # 🏁 加入 Ready Go 篩選條件
+                params["ready_go"] = "eq.true"
 
             # 移除 None 值的參數
             params = {k: v for k, v in params.items() if v is not None}
@@ -1312,14 +1315,14 @@ def filter_stocks():
     count = len(df)
     list_param = urllib.parse.quote(','.join(stock_ids))
     
-    # 🌟 修改表格標題：加入步步高升欄位
+    # 🌟 修改表格標題：加入 🏁Ready 欄位
     html = (f"<h2>篩選結果（共 {count} 筆）</h2>"
-            "<table border='1' cellpadding='6' style='margin-left:0; text-align:left; border-collapse: collapse; min-width: 800px;'>"
+            "<table border='1' cellpadding='6' style='margin-left:0; text-align:left; border-collapse: collapse; min-width: 850px;'>"
             "<thead style='background-color: #f2f2f2;'>"
             "<tr>"
             "<th>股票代號</th><th>股票名稱</th><th>目前股價</th><th>成交量</th>"
             "<th>ADR14(%)</th><th>趨勢</th>"
-            "<th>🚀突破</th><th>🔥強勢</th><th>💥爆量</th><th>🪜步步</th>"
+            "<th>🚀突破</th><th>🔥強勢</th><th>💥爆量</th><th>🪜步步</th><th>🏁Ready</th>"
             "</tr></thead><tbody>")
             
     for idx, row in df.iterrows():
@@ -1337,7 +1340,8 @@ def filter_stocks():
         oh_icon = "✅" if row.get('over_high') else "---"
         hp_icon = "✅" if row.get('high_point') else "---"
         av_icon = "✅" if row.get('abnormal_volume') else "---"
-        sh_icon = "✅" if row.get('step_high') else "---" # 🪜 步步高升圖示
+        sh_icon = "✅" if row.get('step_high') else "---"
+        rg_icon = "✅" if row.get('ready_go') else "---" # 🏁 Ready Go 圖示
         
         price_val = row.get('last_close', 0)
 
@@ -1352,6 +1356,7 @@ def filter_stocks():
                  f"<td style='text-align:center;'>{hp_icon}</td>"
                  f"<td style='text-align:center;'>{av_icon}</td>"
                  f"<td style='text-align:center;'>{sh_icon}</td>"
+                 f"<td style='text-align:center;'>{rg_icon}</td>"
                  f"</tr>")
                  
     html += "</tbody></table><br><a href='/'>返回</a>"

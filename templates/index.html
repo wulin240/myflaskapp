@@ -49,7 +49,6 @@
             margin-bottom: 10px;
         }
         
-        /* 標籤樣式 */
         label { 
             font-size: 14px;
             text-align: right; 
@@ -57,7 +56,6 @@
             flex-shrink: 0; 
         }
         
-        /* 輸入框和選擇框樣式 */
         input[type="text"], 
         input[type="date"], 
         input[type="number"], 
@@ -70,7 +68,6 @@
             box-sizing: border-box;
         }
         
-        /* 按鈕樣式 */
         button { 
             padding: 10px 20px; 
             cursor: pointer; 
@@ -95,20 +92,21 @@
             width: 90%;
             margin-top: 10px;
             background: #f9f9f9;
-            padding: 10px;
+            padding: 12px;
             border-radius: 5px;
         }
         .options-group label {
             text-align: left;
             padding-right: 0;
             min-width: unset;
-            margin-bottom: 5px;
+            margin-bottom: 8px;
             cursor: pointer;
             display: flex;
             align-items: center;
+            font-size: 14px;
         }
         .options-group input {
-            margin-right: 8px;
+            margin-right: 10px;
         }
         
         hr { 
@@ -118,13 +116,13 @@
             width: 50%;
         }
 
-        /* 強勢指標專用樣式 */
-        .highlight-label {
-            color: #d9534f;
-            font-weight: bold;
-        }
+        /* 強勢指標專用樣式 - 顏色管理 */
+        .indicator-overhigh { color: #d9534f; font-weight: bold; } /* 紅色 */
+        .indicator-highpoint { color: #d9534f; font-weight: bold; } /* 紅色 */
+        .indicator-volume { color: #f0ad4e; font-weight: bold; }   /* 橘色 */
+        .indicator-stephigh { color: #007bff; font-weight: bold; } /* 藍色 */
+        .indicator-readygo { color: #6f42c1; font-weight: bold; }  /* 紫色 */
 
-        /* 價格輸入框專用微調 */
         .price-input-container {
             display: flex;
             align-items: center;
@@ -215,22 +213,25 @@
         </div>
 
         <div class="options-group">
-            <label class="highlight-label">
+            <label class="indicator-overhigh">
                 <input type="checkbox" name="over_high" value="1"> 
                 🚀 突破前高 (近10日收盤 > 前40日最高)
             </label>
-            <label class="highlight-label">
+            <label class="indicator-highpoint">
                 <input type="checkbox" name="high_point" value="1"> 
                 🔥 強勢漲幅 (近5日內曾單日漲幅 > 7%)
             </label>
-            <label class="highlight-label" style="color: #f0ad4e;">
+            <label class="indicator-volume">
                 <input type="checkbox" name="abnormal_volume" value="1"> 
                 💥 異常爆量 (5日均量5倍且近期多次)
             </label>
-            <!-- 步步高升篩選新增 -->
-            <label class="highlight-label" style="color: #007bff;">
+            <label class="indicator-stephigh">
                 <input type="checkbox" name="step_high" value="1"> 
-                🪜 步步高升 (近30日內連5日收紅且連漲)
+                🪜 步步高升 (連5日實體紅棒且連漲)
+            </label>
+            <label class="indicator-readygo">
+                <input type="checkbox" name="ready_go" value="1"> 
+                🏁 Ready Go (箱型量縮窄幅整理)
             </label>
             
             <hr style="width: 100%; margin: 10px 0; border-top: 1px dashed #ccc;">
