@@ -1230,7 +1230,7 @@ def chart_from_list(stock_id):
         is_realtime_mode=is_realtime_mode 
     )
 
-# ----------------- 篩選路由 (已加入步步高升 & Ready Go 邏輯) -----------------
+# ----------------- 篩選路由 (支援：突破、強勢、爆量、步步、Ready Go、轉折、支撐) -----------------
 @app.route('/filter', methods=['POST'])
 def filter_stocks():
     # ------------------ 獲取所有篩選及配置參數 ------------------
@@ -1239,12 +1239,14 @@ def filter_stocks():
     trend_type = request.form.get('trend_type', '')
     adr14_min = request.form.get('change_min', type=float, default=0)
     
-    # 獲取強勢指標篩選
+    # 獲取指標篩選狀態 (Checkbox)
     over_high_selected = request.form.get('over_high') == '1'
     high_point_selected = request.form.get('high_point') == '1'
     abnormal_vol_selected = request.form.get('abnormal_volume') == '1'
     step_high_selected = request.form.get('step_high') == '1'
-    ready_go_selected = request.form.get('ready_go') == '1' # 🏁 新增：Ready Go 篩選
+    ready_go_selected = request.form.get('ready_go') == '1'
+    trend_changing_selected = request.form.get('trend_changing') == '1'
+    support_point_selected = request.form.get('support_point') == '1' # 🛡️ 新增支撐點篩選
 
     # 頁面配置參數
     simple_mode = request.form.get('simple_mode') == '1'
@@ -1273,21 +1275,18 @@ def filter_stocks():
                 "select": "*"
             }
 
-            # 股價上限篩選
+            # 額外條件判定
             if price_max is not None:
                 params["last_close"] = f"lte.{price_max}"
 
-            # 根據勾選狀態加入指標篩選
-            if over_high_selected:
-                params["over_high"] = "eq.true"
-            if high_point_selected:
-                params["high_point"] = "eq.true"
-            if abnormal_vol_selected:
-                params["abnormal_volume"] = "eq.true"
-            if step_high_selected:
-                params["step_high"] = "eq.true"
-            if ready_go_selected: # 🏁 加入 Ready Go 篩選條件
-                params["ready_go"] = "eq.true"
+            # 加入指標篩選 API 參數
+            if over_high_selected: params["over_high"] = "eq.true"
+            if high_point_selected: params["high_point"] = "eq.true"
+            if abnormal_vol_selected: params["abnormal_volume"] = "eq.true"
+            if step_high_selected: params["step_high"] = "eq.true"
+            if ready_go_selected: params["ready_go"] = "eq.true"
+            if trend_changing_selected: params["trend_changing"] = "eq.true"
+            if support_point_selected: params["support_point"] = "eq.true" # 🛡️ 加入支撐篩選
 
             # 移除 None 值的參數
             params = {k: v for k, v in params.items() if v is not None}
@@ -1315,19 +1314,18 @@ def filter_stocks():
     count = len(df)
     list_param = urllib.parse.quote(','.join(stock_ids))
     
-    # 🌟 修改表格標題：加入 🏁Ready 欄位
+    # 🌟 表格標題：已新增 🛡️支撐 欄位
     html = (f"<h2>篩選結果（共 {count} 筆）</h2>"
-            "<table border='1' cellpadding='6' style='margin-left:0; text-align:left; border-collapse: collapse; min-width: 850px;'>"
+            "<table border='1' cellpadding='6' style='margin-left:0; text-align:left; border-collapse: collapse; min-width: 1000px;'>"
             "<thead style='background-color: #f2f2f2;'>"
             "<tr>"
             "<th>股票代號</th><th>股票名稱</th><th>目前股價</th><th>成交量</th>"
             "<th>ADR14(%)</th><th>趨勢</th>"
-            "<th>🚀突破</th><th>🔥強勢</th><th>💥爆量</th><th>🪜步步</th><th>🏁Ready</th>"
+            "<th>🚀突破</th><th>🔥強勢</th><th>💥爆量</th><th>🪜步步</th><th>🏁Ready</th><th>🌊轉折</th><th>🛡️支撐</th>"
             "</tr></thead><tbody>")
             
     for idx, row in df.iterrows():
         simple_param = "1" if simple_mode else "0"
-        
         chart_url = (f"/chart/{row['stock_id']}?"
                      f"simple_mode={simple_param}&"
                      f"num_rows={num_rows}&"
@@ -1336,12 +1334,16 @@ def filter_stocks():
                      f"frequency={frequency}&"
                      f"n_sr_levels={n_sr_levels}")
         
-        # 將 boolean 轉為視覺符號
-        oh_icon = "✅" if row.get('over_high') else "---"
-        hp_icon = "✅" if row.get('high_point') else "---"
-        av_icon = "✅" if row.get('abnormal_volume') else "---"
-        sh_icon = "✅" if row.get('step_high') else "---"
-        rg_icon = "✅" if row.get('ready_go') else "---" # 🏁 Ready Go 圖示
+        # 指標符號轉換邏輯
+        icons = {
+            'oh': "✅" if row.get('over_high') else "---",
+            'hp': "✅" if row.get('high_point') else "---",
+            'av': "✅" if row.get('abnormal_volume') else "---",
+            'sh': "✅" if row.get('step_high') else "---",
+            'rg': "✅" if row.get('ready_go') else "---",
+            'tc': "✅" if row.get('trend_changing') else "---",
+            'sp': "✅" if row.get('support_point') else "---" # 🛡️ 支撐點圖示
+        }
         
         price_val = row.get('last_close', 0)
 
@@ -1352,11 +1354,13 @@ def filter_stocks():
                  f"<td>{int(row['latest_volume'])}</td>"
                  f"<td>{row['adr14']:.2f}</td>"
                  f"<td>{row['trend']}</td>"
-                 f"<td style='text-align:center;'>{oh_icon}</td>"
-                 f"<td style='text-align:center;'>{hp_icon}</td>"
-                 f"<td style='text-align:center;'>{av_icon}</td>"
-                 f"<td style='text-align:center;'>{sh_icon}</td>"
-                 f"<td style='text-align:center;'>{rg_icon}</td>"
+                 f"<td style='text-align:center;'>{icons['oh']}</td>"
+                 f"<td style='text-align:center;'>{icons['hp']}</td>"
+                 f"<td style='text-align:center;'>{icons['av']}</td>"
+                 f"<td style='text-align:center;'>{icons['sh']}</td>"
+                 f"<td style='text-align:center;'>{icons['rg']}</td>"
+                 f"<td style='text-align:center;'>{icons['tc']}</td>"
+                 f"<td style='text-align:center;'>{icons['sp']}</td>"
                  f"</tr>")
                  
     html += "</tbody></table><br><a href='/'>返回</a>"
