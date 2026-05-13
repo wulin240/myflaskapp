@@ -123,6 +123,7 @@
         .indicator-stephigh { color: #007bff; font-weight: bold; } /* 藍色 */
         .indicator-readygo { color: #6f42c1; font-weight: bold; }  /* 紫色 */
         .indicator-trendchanging { color: #20c997; font-weight: bold; } /* 綠色 */
+        .indicator-highwave { color: #17a2b8; font-weight: bold; } /* 亮藍色 */
 
         .price-input-container {
             display: flex;
@@ -238,10 +239,14 @@
                 <input type="checkbox" name="trend_changing" value="1"> 
                 🌊 Trend Changing (底部帶量轉折)
             </label>
-            <label style="color: #17a2b8; font-weight: bold;">
-    <input type="checkbox" name="support_point" value="1"> 
-    🛡️ Support Point (回測 90 日支撐)
-</label>
+            <label class="indicator-highwave">
+                <input type="checkbox" name="high_wave" value="1"> 
+                🌊 High Wave (45日內高低價差 > 50%)
+            </label>
+            <label style="color: #6c757d; font-weight: bold;">
+                <input type="checkbox" name="support_point" value="1"> 
+                🛡️ Support Point (回測 90 日支撐)
+            </label>
             
             <hr style="width: 100%; margin: 10px 0; border-top: 1px dashed #ccc;">
             <label for="simple_mode_filter">
