@@ -35,7 +35,7 @@
             display: flex; 
             flex-direction: column;
             align-items: center; 
-            max-width: 450px;
+            max-width: 480px; /* 寬度稍微增加以適應標籤 */
             background-color: #ffffff;
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
         }
@@ -116,14 +116,15 @@
             width: 50%;
         }
 
-        /* 強勢指標專用樣式 - 顏色管理 */
-        .indicator-overhigh { color: #d9534f; font-weight: bold; } /* 紅色 */
-        .indicator-highpoint { color: #d9534f; font-weight: bold; } /* 紅色 */
-        .indicator-volume { color: #f0ad4e; font-weight: bold; }   /* 橘色 */
-        .indicator-stephigh { color: #007bff; font-weight: bold; } /* 藍色 */
-        .indicator-readygo { color: #6f42c1; font-weight: bold; }  /* 紫色 */
-        .indicator-trendchanging { color: #20c997; font-weight: bold; } /* 綠色 */
-        .indicator-highwave { color: #17a2b8; font-weight: bold; } /* 亮藍色 */
+        /* 強勢指標專用樣式 */
+        .indicator-overhigh { color: #d9534f; font-weight: bold; } 
+        .indicator-highpoint { color: #d9534f; font-weight: bold; } 
+        .indicator-volume { color: #f0ad4e; font-weight: bold; } 
+        .indicator-stephigh { color: #007bff; font-weight: bold; } 
+        .indicator-readygo { color: #6f42c1; font-weight: bold; } 
+        .indicator-trendchanging { color: #20c997; font-weight: bold; } 
+        .indicator-highwave { color: #17a2b8; font-weight: bold; } 
+        .indicator-highlift { color: #e83e8c; font-weight: bold; } /* 桃紅色 */
 
         .price-input-container {
             display: flex;
@@ -223,6 +224,10 @@
                 <input type="checkbox" name="high_point" value="1"> 
                 🔥 強勢漲幅 (近5日內曾單日漲幅 > 7%)
             </label>
+            <label class="indicator-highlift">
+                <input type="checkbox" name="high_lift" value="1"> 
+                🏹 強勢拉抬 (近10日連2天漲 > 7%且跳空)
+            </label>
             <label class="indicator-volume">
                 <input type="checkbox" name="abnormal_volume" value="1"> 
                 💥 異常爆量 (5日均量5倍且近期多次)
@@ -241,7 +246,7 @@
             </label>
             <label class="indicator-highwave">
                 <input type="checkbox" name="high_wave" value="1"> 
-                🌊 High Wave (45日內高低價差 > 50%)
+                🌊 High Wave (45日內震盪 > 50%且站上中軸)
             </label>
             <label style="color: #6c757d; font-weight: bold;">
                 <input type="checkbox" name="support_point" value="1"> 
