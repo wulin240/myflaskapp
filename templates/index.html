@@ -118,13 +118,14 @@
 
         /* 強勢指標專用樣式 */
         .indicator-overhigh { color: #d9534f; font-weight: bold; } 
-        .indicator-highpoint { color: #d9534f; font-weight: bold; } 
+        .indicator-highpoint { color: #cc4400; font-weight: bold; } /* 微調顏色區隔 */
+        .indicator-highlift { color: #e83e8c; font-weight: bold; } /* 桃紅色 */
         .indicator-volume { color: #f0ad4e; font-weight: bold; } 
         .indicator-stephigh { color: #007bff; font-weight: bold; } 
         .indicator-readygo { color: #6f42c1; font-weight: bold; } 
         .indicator-trendchanging { color: #20c997; font-weight: bold; } 
         .indicator-highwave { color: #17a2b8; font-weight: bold; } 
-        .indicator-highlift { color: #e83e8c; font-weight: bold; } /* 桃紅色 */
+        .indicator-sleepdragon { color: #b8860b; font-weight: bold; } /* 潛龍專用暗金色 */
 
         .price-input-container {
             display: flex;
@@ -218,11 +219,11 @@
         <div class="options-group">
             <label class="indicator-overhigh">
                 <input type="checkbox" name="over_high" value="1"> 
-                🚀 突破前高 (近10日收盤 > 前40日最高)
+                🚀 突破前高 (近5日帶量突破前20日高點 + 最新日均線多頭)
             </label>
             <label class="indicator-highpoint">
                 <input type="checkbox" name="high_point" value="1"> 
-                🔥 強勢漲幅 (近5日內曾單日漲幅 > 7%)
+                🔥 強勢漲幅 (5日內曾較前日大漲>9% + 隔日洗盤收黑K)
             </label>
             <label class="indicator-highlift">
                 <input type="checkbox" name="high_lift" value="1"> 
@@ -247,6 +248,10 @@
             <label class="indicator-highwave">
                 <input type="checkbox" name="high_wave" value="1"> 
                 🌊 High Wave (45日內震盪 > 50%且站上中軸)
+            </label>
+            <label class="indicator-sleepdragon">
+                <input type="checkbox" name="sleep_dragon" value="1"> 
+                🐉 潛龍震盪 (120日上下軌各觸碰3次以上去重)
             </label>
             <label style="color: #6c757d; font-weight: bold;">
                 <input type="checkbox" name="support_point" value="1"> 

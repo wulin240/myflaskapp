@@ -1230,7 +1230,7 @@ def chart_from_list(stock_id):
         is_realtime_mode=is_realtime_mode 
     )
 
-# ----------------- 篩選路由 (支援：突破、強勢、拉抬、爆量、步步、Ready Go、轉折、支撐、大震盪) -----------------
+# ----------------- 篩選路由 (支援：突破、強勢、拉抬、爆量、步步、Ready Go、轉折、支撐、大震盪、潛龍) -----------------
 @app.route('/filter', methods=['POST'])
 def filter_stocks():
     # ------------------ 獲取所有篩選及配置參數 ------------------
@@ -1242,13 +1242,14 @@ def filter_stocks():
     # 獲取指標篩選狀態 (Checkbox)
     over_high_selected = request.form.get('over_high') == '1'
     high_point_selected = request.form.get('high_point') == '1'
-    high_lift_selected = request.form.get('high_lift') == '1' # 🏹 新增：獲取強勢拉抬篩選
+    high_lift_selected = request.form.get('high_lift') == '1'
     abnormal_vol_selected = request.form.get('abnormal_volume') == '1'
     step_high_selected = request.form.get('step_high') == '1'
     ready_go_selected = request.form.get('ready_go') == '1'
     trend_changing_selected = request.form.get('trend_changing') == '1'
     support_point_selected = request.form.get('support_point') == '1'
-    high_wave_selected = request.form.get('high_wave') == '1' # 🌊 獲取大震盪篩選
+    high_wave_selected = request.form.get('high_wave') == '1'
+    sleep_dragon_selected = request.form.get('sleep_dragon') == '1'
 
     # 頁面配置參數
     simple_mode = request.form.get('simple_mode') == '1'
@@ -1284,13 +1285,14 @@ def filter_stocks():
             # 加入指標篩選 API 參數
             if over_high_selected: params["over_high"] = "eq.true"
             if high_point_selected: params["high_point"] = "eq.true"
-            if high_lift_selected: params["high_lift"] = "eq.true" # 🏹 新增：傳遞給 Supabase
+            if high_lift_selected: params["high_lift"] = "eq.true"
             if abnormal_vol_selected: params["abnormal_volume"] = "eq.true"
             if step_high_selected: params["step_high"] = "eq.true"
             if ready_go_selected: params["ready_go"] = "eq.true"
             if trend_changing_selected: params["trend_changing"] = "eq.true"
             if support_point_selected: params["support_point"] = "eq.true"
             if high_wave_selected: params["high_wave"] = "eq.true"
+            if sleep_dragon_selected: params["sleep_dragon"] = "eq.true"
 
             # 移除 None 值的參數
             params = {k: v for k, v in params.items() if v is not None}
@@ -1318,14 +1320,13 @@ def filter_stocks():
     count = len(df)
     list_param = urllib.parse.quote(','.join(stock_ids))
     
-    # 🌟 表格標題：新增 🏹拉抬 欄位
     html = (f"<h2>篩選結果（共 {count} 筆）</h2>"
-            "<table border='1' cellpadding='6' style='margin-left:0; text-align:left; border-collapse: collapse; min-width: 1200px;'>"
+            "<table border='1' cellpadding='6' style='margin-left:0; text-align:left; border-collapse: collapse; min-width: 1250px;'>"
             "<thead style='background-color: #f2f2f2;'>"
             "<tr>"
             "<th>股票代號</th><th>股票名稱</th><th>目前股價</th><th>成交量</th>"
             "<th>ADR14(%)</th><th>趨勢</th>"
-            "<th>🚀突破</th><th>🔥強勢</th><th>🏹拉抬</th><th>💥爆量</th><th>🪜步步</th><th>🏁Ready</th><th>🌊轉折</th><th>🛡️支撐</th><th>🌊震盪</th>"
+            "<th>🚀突破</th><th>🔥強勢</th><th>🏹拉抬</th><th>💥爆量</th><th>🪜步步</th><th>🏁Ready</th><th>🌊轉折</th><th>🛡️支撐</th><th>🌊震盪</th><th>🐉潛龍</th>"
             "</tr></thead><tbody>")
             
     for idx, row in df.iterrows():
@@ -1342,13 +1343,14 @@ def filter_stocks():
         icons = {
             'oh': "✅" if row.get('over_high') else "---",
             'hp': "✅" if row.get('high_point') else "---",
-            'hl': "✅" if row.get('high_lift') else "---", # 🏹 新增：強勢拉抬圖示
+            'hl': "✅" if row.get('high_lift') else "---",
             'av': "✅" if row.get('abnormal_volume') else "---",
             'sh': "✅" if row.get('step_high') else "---",
             'rg': "✅" if row.get('ready_go') else "---",
             'tc': "✅" if row.get('trend_changing') else "---",
             'sp': "✅" if row.get('support_point') else "---",
-            'hw': "✅" if row.get('high_wave') else "---"
+            'hw': "✅" if row.get('high_wave') else "---",
+            'sd': "✅" if row.get('sleep_dragon') else "---"
         }
         
         price_val = row.get('last_close', 0)
@@ -1362,75 +1364,16 @@ def filter_stocks():
                  f"<td>{row['trend']}</td>"
                  f"<td style='text-align:center;'>{icons['oh']}</td>"
                  f"<td style='text-align:center;'>{icons['hp']}</td>"
-                 f"<td style='text-align:center;'>{icons['hl']}</td>" # 🏹 渲染
+                 f"<td style='text-align:center;'>{icons['hl']}</td>"
                  f"<td style='text-align:center;'>{icons['av']}</td>"
                  f"<td style='text-align:center;'>{icons['sh']}</td>"
-                 f"<td style='text-align:center;'>{icons['rg']}</td>"
+                 f"<td style='text-align:center;'>{icons['rg']}</td>"  # ⭐ 這裡已經修正為正確的 'rg' 了
                  f"<td style='text-align:center;'>{icons['tc']}</td>"
                  f"<td style='text-align:center;'>{icons['sp']}</td>"
                  f"<td style='text-align:center;'>{icons['hw']}</td>"
+                 f"<td style='text-align:center;'>{icons['sd']}</td>"
                  f"</tr>")
                  
-    html += "</tbody></table><br><a href='/'>返回</a>"
-    return html
-
-@app.route('/favorites', methods=['GET'])
-def favorites_page():
-    simple_mode = request.args.get('simple_mode') == '1'
-    num_rows = request.args.get('num_rows', type=int, default=30)
-    frequency = request.args.get('frequency', 'D')
-    n_sr_levels = request.args.get('n_sr_levels', type=int, default=3)
-    
-    params_string = (f"simple_mode={'1' if simple_mode else '0'}&num_rows={num_rows}&frequency={frequency}&n_sr_levels={n_sr_levels}")
-    
-    try:
-        res = requests.get(f"{SUPABASE_URL}/rest/v1/{FAVORITE_TABLE}?select=stock_id,stock_name,note&order=created_at.desc", headers=headers)
-        res.raise_for_status()
-        fav_data = res.json()
-    except Exception as e: return f"<h2>讀取最愛股票失敗: {e}</h2><a href='/'>返回</a>"
-    
-    if not fav_data: return "<h2>尚無最愛股票</h2><a href='/'>返回</a>"
-    
-    stock_ids = [str(item['stock_id']) for item in fav_data]
-    list_param = urllib.parse.quote(','.join(stock_ids))
-    note_map = {str(item['stock_id']): item.get('note', '') or '' for item in fav_data}
-    
-    try:
-        res_qv = requests.get(
-            f"{SUPABASE_URL}/rest/v1/{QUICK_VIEW_TABLE}", 
-            headers=headers, 
-            params={"stock_id": f"in.({','.join(stock_ids)})", "select": "*"}
-        )
-        res_qv.raise_for_status()
-        qv_data = res_qv.json()
-    except Exception as e: return f"<h2>讀取最愛股票快照資料失敗: {e}</h2><a href='/'>返回</a>"
-
-    df_qv = pd.DataFrame(qv_data)
-    df_qv['stock_id'] = df_qv['stock_id'].astype(str)
-    # 確保順序與最愛清單一致
-    df_qv = df_qv.set_index('stock_id').reindex(stock_ids).reset_index() 
-    count = len(df_qv)
-    
-    html = (f"<h2>我的最愛（共 {count} 筆）</h2>" 
-            f"<form method='post' action='/favorites_clear?{params_string}' onsubmit=\"return confirm('確定要刪除所有最愛嗎？');\">" 
-            "<button type='submit' style='margin-bottom:10px;'>刪除全部最愛</button>" 
-            "</form>" 
-            "<table border='1' cellpadding='6' style='margin-left:0; text-align:left; border-collapse: collapse;'>"
-            "<thead><tr style='background-color: #f2f2f2;'>"
-            "<th>股票代號</th><th>股票名稱</th><th>備註</th><th>成交量</th><th>ADR14(%)</th><th>14天平均成交量</th><th>趨勢</th>"
-            "</tr></thead><tbody>")
-            
-    for row in df_qv.itertuples():
-        stock_id = str(row.stock_id)
-        current_index = stock_ids.index(stock_id) 
-        current_note = note_map.get(stock_id, '') 
-        simple_param = "1" if simple_mode else "0"
-        
-        html += (f"<tr>" 
-                  f"<td><a href='/chart/{stock_id}?simple_mode={simple_param}&num_rows={num_rows}&list={list_param}&index={current_index}&frequency={frequency}&n_sr_levels={n_sr_levels}'>{stock_id}</a></td>" 
-                  f"<td>{getattr(row, 'stock_name', 'N/A')}</td><td>{current_note}</td><td>{int(row.latest_volume)}</td><td>{row.adr14:.2f}</td><td>{int(row.avg_volume_14)}</td><td>{row.trend}</td>" 
-                  f"</tr>")
-                  
     html += "</tbody></table><br><a href='/'>返回</a>"
     return html
 # ----------------- Favorite 路由：解決 415 錯誤 (期望 JSON) -----------------
