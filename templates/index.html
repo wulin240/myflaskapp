@@ -126,6 +126,7 @@
         .indicator-trendchanging { color: #20c997; font-weight: bold; } 
         .indicator-highwave { color: #17a2b8; font-weight: bold; } 
         .indicator-sleepdragon { color: #b8860b; font-weight: bold; } /* 潛龍專用暗金色 */
+        .indicator-triangle { color: #0ea5e9; font-weight: bold; } /* ⭐ 新增：三角收斂型態專用天藍色 */
 
         .price-input-container {
             display: flex;
@@ -252,6 +253,10 @@
             <label class="indicator-sleepdragon">
                 <input type="checkbox" name="sleep_dragon" value="1"> 
                 🐉 潛龍震盪 (120日上下軌各觸碰3次以上去重)
+            </label>
+            <label class="indicator-triangle">
+                <input type="checkbox" name="is_converging_triangle" value="1"> 
+                📐 三角收斂 (3頂結構連續收斂變低 + 3底結構升高或持平在5%內)
             </label>
             <label style="color: #6c757d; font-weight: bold;">
                 <input type="checkbox" name="support_point" value="1"> 

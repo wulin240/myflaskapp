@@ -174,8 +174,10 @@ def fetch_stock(stock: str):
     if df is None or df.empty:
         return []
 
+    # 🌟 核心修改點：完美拆解新版 yfinance 雙層欄位格式
     if isinstance(df.columns, pd.MultiIndex):
-        df.columns = ['_'.join([str(i) for i in col if i]) for col in df.columns.values]
+        # 僅提取第一層指標名稱（Price），丟棄第二層重複的個股代號標籤
+        df.columns = [col[0] if isinstance(col, tuple) else col for col in df.columns]
 
     if 'Date' not in df.columns:
         df = df.reset_index()

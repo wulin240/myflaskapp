@@ -1230,7 +1230,7 @@ def chart_from_list(stock_id):
         is_realtime_mode=is_realtime_mode 
     )
 
-# ----------------- 篩選路由 (支援：突破、強勢、拉抬、爆量、步步、Ready Go、轉折、支撐、大震盪、潛龍) -----------------
+# ----------------- 篩選路由 (支援：突破、強勢、拉抬、爆量、步步、Ready Go、轉折、支撐、大震盪、潛龍、三角收斂) -----------------
 @app.route('/filter', methods=['POST'])
 def filter_stocks():
     # ------------------ 獲取所有篩選及配置參數 ------------------
@@ -1250,6 +1250,7 @@ def filter_stocks():
     support_point_selected = request.form.get('support_point') == '1'
     high_wave_selected = request.form.get('high_wave') == '1'
     sleep_dragon_selected = request.form.get('sleep_dragon') == '1'
+    triangle_selected = request.form.get('is_converging_triangle') == '1'  # ⭐ 新增：獲取前端三角收斂勾選狀態
 
     # 頁面配置參數
     simple_mode = request.form.get('simple_mode') == '1'
@@ -1293,6 +1294,7 @@ def filter_stocks():
             if support_point_selected: params["support_point"] = "eq.true"
             if high_wave_selected: params["high_wave"] = "eq.true"
             if sleep_dragon_selected: params["sleep_dragon"] = "eq.true"
+            if triangle_selected: params["is_converging_triangle"] = "eq.true"  # ⭐ 新增：對應 Supabase View 裡的判定欄位
 
             # 移除 None 值的參數
             params = {k: v for k, v in params.items() if v is not None}
@@ -1321,12 +1323,12 @@ def filter_stocks():
     list_param = urllib.parse.quote(','.join(stock_ids))
     
     html = (f"<h2>篩選結果（共 {count} 筆）</h2>"
-            "<table border='1' cellpadding='6' style='margin-left:0; text-align:left; border-collapse: collapse; min-width: 1250px;'>"
+            "<table border='1' cellpadding='6' style='margin-left:0; text-align:left; border-collapse: collapse; min-width: 1300px;'>"
             "<thead style='background-color: #f2f2f2;'>"
             "<tr>"
             "<th>股票代號</th><th>股票名稱</th><th>目前股價</th><th>成交量</th>"
             "<th>ADR14(%)</th><th>趨勢</th>"
-            "<th>🚀突破</th><th>🔥強勢</th><th>🏹拉抬</th><th>💥爆量</th><th>🪜步步</th><th>🏁Ready</th><th>🌊轉折</th><th>🛡️支撐</th><th>🌊震盪</th><th>🐉潛龍</th>"
+            "<th>🚀突破</th><th>🔥強勢</th><th>🏹拉抬</th><th>💥爆量</th><th>🪜步步</th><th>🏁Ready</th><th>🌊轉折</th><th>🛡️支撐</th><th>🌊震盪</th><th>🐉潛龍</th><th>📐三角</th>"  # ⭐ 表頭新增「📐三角」
             "</tr></thead><tbody>")
             
     for idx, row in df.iterrows():
@@ -1350,7 +1352,8 @@ def filter_stocks():
             'tc': "✅" if row.get('trend_changing') else "---",
             'sp': "✅" if row.get('support_point') else "---",
             'hw': "✅" if row.get('high_wave') else "---",
-            'sd': "✅" if row.get('sleep_dragon') else "---"
+            'sd': "✅" if row.get('sleep_dragon') else "---",
+            'tg': "✅" if row.get('is_converging_triangle') else "---"  # ⭐ 新增：對應圖表渲染符號
         }
         
         price_val = row.get('last_close', 0)
@@ -1367,11 +1370,12 @@ def filter_stocks():
                  f"<td style='text-align:center;'>{icons['hl']}</td>"
                  f"<td style='text-align:center;'>{icons['av']}</td>"
                  f"<td style='text-align:center;'>{icons['sh']}</td>"
-                 f"<td style='text-align:center;'>{icons['rg']}</td>"  # ⭐ 這裡已經修正為正確的 'rg' 了
+                 f"<td style='text-align:center;'>{icons['rg']}</td>"
                  f"<td style='text-align:center;'>{icons['tc']}</td>"
                  f"<td style='text-align:center;'>{icons['sp']}</td>"
                  f"<td style='text-align:center;'>{icons['hw']}</td>"
                  f"<td style='text-align:center;'>{icons['sd']}</td>"
+                 f"<td style='text-align:center;'>{icons['tg']}</td>"  # ⭐ 輸出表格新增三角收斂狀態
                  f"</tr>")
                  
     html += "</tbody></table><br><a href='/'>返回</a>"
