@@ -174,13 +174,20 @@ def fetch_stock(stock: str):
     if df is None or df.empty:
         return []
 
-    # 🌟 核心修改點：完美拆解新版 yfinance 雙層欄位格式
-    if isinstance(df.columns, pd.MultiIndex):
-        # 僅提取第一層指標名稱（Price），丟棄第二層重複的個股代號標籤
-        df.columns = [col[0] if isinstance(col, tuple) else col for col in df.columns]
-
+    # 🌟【完美相容新舊版 yfinance】核心修復區塊
+    # 1. 優先把 Date 釋放到欄位裡（避免在扁平化後 reset_index 被 Pandas 自動強制命名成 Tuple）
     if 'Date' not in df.columns:
+        if df.index.name is None:
+            df.index.name = 'Date'
         df = df.reset_index()
+
+    # 2. 這時候再來處理 MultiIndex，確保不論新版舊版，欄位通通安全降維
+    if isinstance(df.columns, pd.MultiIndex):
+        # 僅提取第一層指標名稱（Price），若第零層為空字串（reset_index 所產生的）則保留原欄位名
+        df.columns = [col[0] if (isinstance(col, tuple) and col[0] != '') else col for col in df.columns]
+
+    # 3. 終極防禦：強制將所有欄位名稱清洗為純字串，徹底消滅隱藏的 Tuple 格式
+    df.columns = [str(col) for col in df.columns]
 
     col_map = {}
     for c in df.columns:
