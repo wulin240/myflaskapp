@@ -307,3 +307,4 @@ if failed_unique:
     print(f"\n⚠️ 以下股票抓取或處理可能失敗（需人工檢查）：{failed_unique}")
 
 print("\n✅ 單線程抓取完成！")
+# 上傳剩餘資料
