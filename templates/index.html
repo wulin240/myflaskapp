@@ -126,7 +126,8 @@
         .indicator-trendchanging { color: #20c997; font-weight: bold; } 
         .indicator-highwave { color: #17a2b8; font-weight: bold; } 
         .indicator-sleepdragon { color: #b8860b; font-weight: bold; } /* 潛龍專用暗金色 */
-        .indicator-triangle { color: #0ea5e9; font-weight: bold; } /* ⭐ 新增：三角收斂型態專用天藍色 */
+        .indicator-triangle { color: #0ea5e9; font-weight: bold; } /* ⭐ 三角收斂型態專用天藍色 */
+        .indicator-godpoint { color: #d63384; font-weight: bold; } /* 🎯 新增：仙人指路 (GOD POINT) 專用亮粉紫色 */
 
         .price-input-container {
             display: flex;
@@ -218,6 +219,10 @@
         </div>
 
         <div class="options-group">
+            <label class="indicator-godpoint">
+                <input type="checkbox" name="god_point" value="1"> 
+                🌟 仙人指路 (近10日高低收差>=3%且長紅爆量2.5倍)
+            </label>
             <label class="indicator-overhigh">
                 <input type="checkbox" name="over_high" value="1"> 
                 🚀 突破前高 (近5日帶量突破前20日高點 + 最新日均線多頭)

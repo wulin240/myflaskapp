@@ -1230,7 +1230,7 @@ def chart_from_list(stock_id):
         is_realtime_mode=is_realtime_mode 
     )
 
-# ----------------- 篩選路由 (支援：突破、強勢、拉抬、爆量、步步、Ready Go、轉折、支撐、大震盪、潛龍、三角收斂) -----------------
+# ----------------- 篩選路由 (支援：突破、強勢、拉抬、爆量、步步、Ready Go、轉折、支撐、大震盪、潛龍、三角收斂、仙人指路) -----------------
 @app.route('/filter', methods=['POST'])
 def filter_stocks():
     # ------------------ 獲取所有篩選及配置參數 ------------------
@@ -1240,6 +1240,7 @@ def filter_stocks():
     adr14_min = request.form.get('change_min', type=float, default=0)
     
     # 獲取指標篩選狀態 (Checkbox)
+    god_point_selected = request.form.get('god_point') == '1'          # ⭐ 新增：獲取前端仙人指路勾選狀態
     over_high_selected = request.form.get('over_high') == '1'
     high_point_selected = request.form.get('high_point') == '1'
     high_lift_selected = request.form.get('high_lift') == '1'
@@ -1250,7 +1251,7 @@ def filter_stocks():
     support_point_selected = request.form.get('support_point') == '1'
     high_wave_selected = request.form.get('high_wave') == '1'
     sleep_dragon_selected = request.form.get('sleep_dragon') == '1'
-    triangle_selected = request.form.get('is_converging_triangle') == '1'  # ⭐ 新增：獲取前端三角收斂勾選狀態
+    triangle_selected = request.form.get('is_converging_triangle') == '1'
 
     # 頁面配置參數
     simple_mode = request.form.get('simple_mode') == '1'
@@ -1284,6 +1285,7 @@ def filter_stocks():
                 params["last_close"] = f"lte.{price_max}"
 
             # 加入指標篩選 API 參數
+            if god_point_selected: params["god_point"] = "eq.true"      # ⭐ 新增：對應 Supabase View 裡的 god_point 欄位
             if over_high_selected: params["over_high"] = "eq.true"
             if high_point_selected: params["high_point"] = "eq.true"
             if high_lift_selected: params["high_lift"] = "eq.true"
@@ -1294,7 +1296,7 @@ def filter_stocks():
             if support_point_selected: params["support_point"] = "eq.true"
             if high_wave_selected: params["high_wave"] = "eq.true"
             if sleep_dragon_selected: params["sleep_dragon"] = "eq.true"
-            if triangle_selected: params["is_converging_triangle"] = "eq.true"  # ⭐ 新增：對應 Supabase View 裡的判定欄位
+            if triangle_selected: params["is_converging_triangle"] = "eq.true"
 
             # 移除 None 值的參數
             params = {k: v for k, v in params.items() if v is not None}
@@ -1328,7 +1330,7 @@ def filter_stocks():
             "<tr>"
             "<th>股票代號</th><th>股票名稱</th><th>目前股價</th><th>成交量</th>"
             "<th>ADR14(%)</th><th>趨勢</th>"
-            "<th>🚀突破</th><th>🔥強勢</th><th>🏹拉抬</th><th>💥爆量</th><th>🪜步步</th><th>🏁Ready</th><th>🌊轉折</th><th>🛡️支撐</th><th>🌊震盪</th><th>🐉潛龍</th><th>📐三角</th>"  # ⭐ 表頭新增「📐三角」
+            "<th>🌟仙人</th><th>🚀突破</th><th>🔥強勢</th><th>🏹拉抬</th><th>💥爆量</th><th>🪜步步</th><th>🏁Ready</th><th>🌊轉折</th><th>🛡️支撐</th><th>🌊震盪</th><th>🐉潛龍</th><th>📐三角</th>"  # ⭐ 表頭新增「🌟仙人」
             "</tr></thead><tbody>")
             
     for idx, row in df.iterrows():
@@ -1343,6 +1345,7 @@ def filter_stocks():
         
         # 指標符號轉換邏輯
         icons = {
+            'gp': "✅" if row.get('god_point') else "---",          # ⭐ 新增：仙人指路渲染符號
             'oh': "✅" if row.get('over_high') else "---",
             'hp': "✅" if row.get('high_point') else "---",
             'hl': "✅" if row.get('high_lift') else "---",
@@ -1353,7 +1356,7 @@ def filter_stocks():
             'sp': "✅" if row.get('support_point') else "---",
             'hw': "✅" if row.get('high_wave') else "---",
             'sd': "✅" if row.get('sleep_dragon') else "---",
-            'tg': "✅" if row.get('is_converging_triangle') else "---"  # ⭐ 新增：對應圖表渲染符號
+            'tg': "✅" if row.get('is_converging_triangle') else "---"
         }
         
         price_val = row.get('last_close', 0)
@@ -1365,6 +1368,7 @@ def filter_stocks():
                  f"<td>{int(row['latest_volume'])}</td>"
                  f"<td>{row['adr14']:.2f}</td>"
                  f"<td>{row['trend']}</td>"
+                 f"<td style='text-align:center;'>{icons['gp']}</td>"    # ⭐ 輸出表格新增仙人指路狀態
                  f"<td style='text-align:center;'>{icons['oh']}</td>"
                  f"<td style='text-align:center;'>{icons['hp']}</td>"
                  f"<td style='text-align:center;'>{icons['hl']}</td>"
@@ -1375,7 +1379,7 @@ def filter_stocks():
                  f"<td style='text-align:center;'>{icons['sp']}</td>"
                  f"<td style='text-align:center;'>{icons['hw']}</td>"
                  f"<td style='text-align:center;'>{icons['sd']}</td>"
-                 f"<td style='text-align:center;'>{icons['tg']}</td>"  # ⭐ 輸出表格新增三角收斂狀態
+                 f"<td style='text-align:center;'>{icons['tg']}</td>"
                  f"</tr>")
                  
     html += "</tbody></table><br><a href='/'>返回</a>"
