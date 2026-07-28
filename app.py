@@ -1384,6 +1384,63 @@ def filter_stocks():
                  
     html += "</tbody></table><br><a href='/'>返回</a>"
     return html
+# ----------------- Favorite 路由get
+@app.route('/favorites', methods=['GET'])
+def favorites_page():
+    simple_mode = request.args.get('simple_mode') == '1'
+    num_rows = request.args.get('num_rows', type=int, default=30)
+    frequency = request.args.get('frequency', 'D')
+    n_sr_levels = request.args.get('n_sr_levels', type=int, default=3)
+    
+    params_string = (f"simple_mode={'1' if simple_mode else '0'}&num_rows={num_rows}&frequency={frequency}&n_sr_levels={n_sr_levels}")
+    
+    try:
+        res = requests.get(f"{SUPABASE_URL}/rest/v1/{FAVORITE_TABLE}?select=stock_id,stock_name,note&order=created_at.desc", headers=headers)
+        res.raise_for_status()
+        fav_data = res.json()
+    except Exception as e: return f"<h2>讀取最愛股票失敗: {e}</h2><a href='/'>返回</a>"
+    
+    if not fav_data: return "<h2>尚無最愛股票</h2><a href='/'>返回</a>"
+    
+    stock_ids = [item['stock_id'] for item in fav_data]
+    list_param = urllib.parse.quote(','.join(stock_ids))
+    note_map = {item['stock_id']: item.get('note', '') or '' for item in fav_data}
+    
+    try:
+        res_qv = requests.get(
+            f"{SUPABASE_URL}/rest/v1/{QUICK_VIEW_TABLE}", 
+            headers=headers, 
+            params={"stock_id": f"in.({','.join(stock_ids)})", "select": "*"}
+        )
+        res_qv.raise_for_status()
+        qv_data = res_qv.json()
+    except Exception as e: return f"<h2>讀取最愛股票快照資料失敗: {e}</h2><a href='/'>返回</a>"
+
+    df_qv = pd.DataFrame(qv_data)
+    df_qv['stock_id'] = df_qv['stock_id'].astype(str)
+    df_qv = df_qv.set_index('stock_id').reindex(stock_ids).reset_index() 
+    count = len(df_qv)
+    
+    html = (f"<h2>我的最愛（共 {count} 筆）</h2>" 
+            f"<form method='post' action='/favorites_clear?{params_string}' onsubmit=\"return confirm('確定要刪除所有最愛嗎？');\">" 
+            "<button type='submit' style='margin-bottom:10px;'>刪除全部最愛</button>" 
+            "</form>" 
+            "<table border='1' cellpadding='6' style='margin-left:0; text-align:left;'><thead><tr><th>股票代號</th><th>股票名稱</th><th>備註</th><th>成交量</th><th>ADR14(%)</th><th>14天平均成交量</th><th>趨勢</th></tr></thead><tbody>")
+            
+    for row in df_qv.itertuples():
+        stock_id = str(row.stock_id)
+        current_index = stock_ids.index(stock_id) 
+        current_note = note_map.get(stock_id, '') 
+        simple_param = "1" if simple_mode else "0"
+        
+        # 修正跳轉連結：確保連結包含所有參數
+        html += (f"<tr>" 
+                  f"<td><a href='/chart/{stock_id}?simple_mode={simple_param}&num_rows={num_rows}&list={list_param}&index={current_index}&frequency={frequency}&n_sr_levels={n_sr_levels}'>{stock_id}</a></td>" 
+                  f"<td>{getattr(row, 'stock_name', 'N/A')}</td><td>{current_note}</td><td>{int(row.latest_volume)}</td><td>{row.adr14:.2f}</td><td>{int(row.avg_volume_14)}</td><td>{row.trend}</td>" 
+                  f"</tr>")
+                  
+    html += "</tbody></table><br><a href='/'>返回</a>"
+    return html
 # ----------------- Favorite 路由：解決 415 錯誤 (期望 JSON) -----------------
 @app.route('/favorite', methods=['POST'])
 def favorite():
