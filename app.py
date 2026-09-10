@@ -1433,11 +1433,15 @@ def favorites_page():
         current_note = note_map.get(stock_id, '') 
         simple_param = "1" if simple_mode else "0"
         
+       # 先處理可能會是 NaN 的數值，如果是空值就預設為 0（或你想顯示的數字）
+        latest_vol = int(row.latest_volume) if pd.notna(row.latest_volume) else 0
+        avg_vol = int(row.avg_volume_14) if pd.notna(row.avg_volume_14) else 0
+
         # 修正跳轉連結：確保連結包含所有參數
         html += (f"<tr>" 
-                  f"<td><a href='/chart/{stock_id}?simple_mode={simple_param}&num_rows={num_rows}&list={list_param}&index={current_index}&frequency={frequency}&n_sr_levels={n_sr_levels}'>{stock_id}</a></td>" 
-                  f"<td>{getattr(row, 'stock_name', 'N/A')}</td><td>{current_note}</td><td>{int(row.latest_volume)}</td><td>{row.adr14:.2f}</td><td>{int(row.avg_volume_14)}</td><td>{row.trend}</td>" 
-                  f"</tr>")
+                 f"<td><a href='/chart/{stock_id}?simple_mode={simple_param}&num_rows={num_rows}&list={list_param}&index={current_index}&frequency={frequency}&n_sr_levels={n_sr_levels}'>{stock_id}</a></td>" 
+                 f"<td>{getattr(row, 'stock_name', 'N/A')}</td><td>{current_note}</td><td>{latest_vol}</td><td>{row.adr14:.2f}</td><td>{avg_vol}</td><td>{row.trend}</td>" 
+                 f"</tr>")
                   
     html += "</tbody></table><br><a href='/'>返回</a>"
     return html
